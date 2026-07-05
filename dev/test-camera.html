@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>test-camera · off-axis (Kooima)</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #020508; overflow: hidden; }
+    canvas { display: block; }
+    #hud {
+      position: fixed; top: 12px; left: 12px;
+      font: 12px/1.5 ui-monospace, Menlo, monospace;
+      color: #7BF7FF; background: rgba(2,5,8,0.6);
+      padding: 8px 10px; border: 1px solid #0A3540; white-space: pre;
+      pointer-events: none;
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="hud">eye: --</div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OffAxisCamera } from '../js/offAxisCamera.js';
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x020508, 1);
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const oac = new OffAxisCamera({});
+
+    // Grid pinned to the screen plane (z=0) — should never move as the eye moves.
+    const grid = new THREE.GridHelper(20, 20, 0x22E5FF, 0x0A3540);
+    grid.rotation.x = Math.PI / 2; // lay it in the XY plane (screen plane)
+    scene.add(grid);
+
+    // Nested wireframe boxes receding to z = -40.
+    const boxColors = [0x22E5FF, 0x7BF7FF];
+    for (let i = 0; i < 9; i++) {
+      const z = -i * 5;               // 0, -5, ... -40
+      const size = 2 + i * 1.5;       // grow with depth so they nest
+      const geo = new THREE.BoxGeometry(size, size, size);
+      const edges = new THREE.EdgesGeometry(geo);
+      const mat = new THREE.LineBasicMaterial({ color: boxColors[i % 2] });
+      const box = new THREE.LineSegments(edges, mat);
+      box.position.z = z;
+      scene.add(box);
+    }
+
+    const hud = document.getElementById('hud');
+    let eyeXM = 0, eyeYM = 0;
+    const EYE_Z_M = 0.55;
+
+    // Map viewport to ±0.25 m in x/y; z fixed at 0.55 m.
+    window.addEventListener('pointermove', (e) => {
+      const nx = (e.clientX / window.innerWidth) * 2 - 1;   // -1..1
+      const ny = (e.clientY / window.innerHeight) * 2 - 1;  // -1..1 (down positive)
+      eyeXM = nx * 0.25;
+      eyeYM = -ny * 0.25; // screen-up is +y
+    });
+
+    function onResize() {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      oac.setViewport(window.innerWidth, window.innerHeight);
+    }
+    window.addEventListener('resize', onResize);
+
+    function frame() {
+      oac.setEyePosition(eyeXM, eyeYM, EYE_Z_M);
+      oac.update();
+      hud.textContent =
+        `eye (m)  x: ${eyeXM.toFixed(3)}  y: ${eyeYM.toFixed(3)}  z: ${EYE_Z_M.toFixed(3)}`;
+      renderer.render(scene, oac.camera);
+      requestAnimationFrame(frame);
+    }
+    frame();
+  </script>
+</body>
+</html>
