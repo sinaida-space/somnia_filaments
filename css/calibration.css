@@ -1,0 +1,109 @@
+/* calibration.css — arrival ritual overlay. IBM Plex Mono, cyan on void. */
+
+.calib-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #020508;
+  color: #7BF7FF;
+  font-family: 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+  z-index: 1000;
+}
+
+.calib-screen {
+  max-width: 34em;
+  padding: 2rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.calib-title {
+  font-size: 1.4rem;
+  letter-spacing: 0.08em;
+  margin: 0;
+  color: #22E5FF;
+  text-transform: lowercase;
+}
+
+.calib-line {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin: 0;
+  color: #7BF7FF;
+  opacity: 0.85;
+}
+
+.calib-url {
+  font-size: 0.8rem;
+  opacity: 0.5;
+  word-break: break-all;
+}
+
+.calib-button {
+  appearance: none;
+  background: transparent;
+  border: 1px solid #22E5FF;
+  color: #22E5FF;
+  font-family: inherit;
+  font-size: 0.9rem;
+  letter-spacing: 0.05em;
+  text-transform: lowercase;
+  padding: 0.7em 1.6em;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.calib-button:hover,
+.calib-button:focus-visible {
+  background: #22E5FF;
+  color: #020508;
+  outline: none;
+}
+
+.calib-dot {
+  position: fixed;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: #22E5FF;
+  box-shadow: 0 0 1.2rem 0.2rem rgba(34, 229, 255, 0.6);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 1001;
+}
+
+.calib-hand {
+  position: fixed;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: #7BF7FF;
+  opacity: 0.7;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 1001;
+}
+
+.calib-video {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.15;
+  z-index: 999;
+}
+
+.calib-fade {
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.calib-fade.calib-visible {
+  opacity: 1;
+}

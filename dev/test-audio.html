@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>test-audio</title>
+<style>
+  body {
+    background: #020508;
+    color: #22E5FF;
+    font-family: 'IBM Plex Mono', monospace;
+    padding: 2rem;
+  }
+  button {
+    background: transparent;
+    color: #22E5FF;
+    border: 1px solid #22E5FF;
+    padding: 0.6rem 1rem;
+    margin: 0.3rem;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  button:hover { background: #0A3540; }
+  #log {
+    margin-top: 2rem;
+    white-space: pre-wrap;
+    font-size: 0.85rem;
+    opacity: 0.8;
+    border-top: 1px solid #0A3540;
+    padding-top: 1rem;
+  }
+</style>
+</head>
+<body>
+  <h1>test-audio</h1>
+  <p>init() only fires on the first button press (user gesture). Nothing plays before that.</p>
+
+  <div>
+    <button id="btn-init">init()</button>
+    <button id="btn-mute">toggle mute</button>
+  </div>
+
+  <div>
+    <button id="btn-pluck">block:broken (pluck)</button>
+    <button id="btn-q-start">question:start (shimmer up)</button>
+    <button id="btn-q-end">question:end (shimmer down)</button>
+    <button id="btn-miss">ball:miss (thump)</button>
+    <button id="btn-ending">game:state ending (drone swell+fade)</button>
+  </div>
+
+  <div id="log"></div>
+
+  <script type="module">
+    import { audio } from '../js/audio.js';
+    import { bus } from '../js/events.js';
+
+    const log = document.getElementById('log');
+    let muted = false;
+    let questionIndex = 0;
+
+    function print(msg) {
+      log.textContent += msg + '\n';
+    }
+
+    document.getElementById('btn-init').addEventListener('click', () => {
+      audio.init();
+      audio.listen(bus);
+      print('audio.init() + listen() called');
+    });
+
+    document.getElementById('btn-mute').addEventListener('click', () => {
+      muted = !muted;
+      audio.setMuted(muted);
+      print('muted: ' + muted);
+    });
+
+    document.getElementById('btn-pluck').addEventListener('click', () => {
+      bus.emit('block:broken', {});
+      print('emitted block:broken (questionIndex=' + questionIndex + ')');
+    });
+
+    document.getElementById('btn-q-start').addEventListener('click', () => {
+      questionIndex = (questionIndex + 1) % 5;
+      bus.emit('question:start', { index: questionIndex });
+      print('emitted question:start index=' + questionIndex);
+    });
+
+    document.getElementById('btn-q-end').addEventListener('click', () => {
+      bus.emit('question:end', {});
+      print('emitted question:end');
+    });
+
+    document.getElementById('btn-miss').addEventListener('click', () => {
+      bus.emit('ball:miss', {});
+      print('emitted ball:miss');
+    });
+
+    document.getElementById('btn-ending').addEventListener('click', () => {
+      bus.emit('game:state', { state: 'ending' });
+      print('emitted game:state ending');
+    });
+  </script>
+</body>
+</html>

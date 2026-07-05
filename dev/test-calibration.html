@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>test — calibration</title>
+<link rel="stylesheet" href="../css/calibration.css">
+<style>
+  html, body { margin: 0; background: #020508; height: 100%; }
+  #log {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    font-family: ui-monospace, monospace; font-size: 12px; color: #7BF7FF;
+    background: rgba(2,5,8,0.85); padding: 0.5rem 1rem; z-index: 2000;
+    white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="log">waiting for run…</div>
+
+<script type="module">
+import { runOnboarding } from '../js/calibration.js';
+
+// Mock Tracking (?mock=1 is the intended trigger in the real app; this test
+// page always runs the mock since Task 5's tracking.js is out of scope here).
+// Mouse position drives hand.x/y in -1..1; head is a fixed present point so
+// the parallax preview screen is exercised.
+function makeMockTracking() {
+  let mouseX = 0, mouseY = 0;
+  let handRange = { minX: -1, maxX: 1, minY: -1, maxY: 1 };
+  let lastMoveAt = performance.now();
+
+  window.addEventListener('mousemove', (e) => {
+    mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+    mouseY = (e.clientY / window.innerHeight) * 2 - 1;
+    lastMoveAt = performance.now();
+  });
+
+  function mapRange(v, min, max) {
+    if (max - min < 1e-6) return 0;
+    const t = (v - min) / (max - min);
+    return Math.max(-1, Math.min(1, t * 2 - 1));
+  }
+
+  return {
+    async init(videoEl) {
+      // simulate camera warm-up
+      await new Promise((r) => setTimeout(r, 400));
+      return true;
+    },
+    poll() {
+      const present = (performance.now() - lastMoveAt) < 3000;
+      return {
+        hand: {
+          x: mapRange(mouseX, handRange.minX, handRange.maxX),
+          y: mapRange(mouseY, handRange.minY, handRange.maxY),
+          present
+        },
+        head: { x: mouseX * 0.1, y: mouseY * 0.1, z: 0.55, present: true },
+        mode: 'full',
+        procMs: 3
+      };
+    },
+    setMode(m) { /* no-op in mock */ },
+    setHandRange(r) { handRange = r; }
+  };
+}
+
+const root = document.getElementById('root');
+const logEl = document.getElementById('log');
+const tracking = makeMockTracking();
+
+runOnboarding(tracking, root)
+  .then((result) => {
+    logEl.textContent = 'resolved: ' + JSON.stringify(result, null, 2);
+    console.log('runOnboarding resolved', result);
+  })
+  .catch((err) => {
+    logEl.textContent = 'rejected: ' + JSON.stringify(err);
+    console.log('runOnboarding rejected', err);
+  });
+</script>
+</body>
+</html>
