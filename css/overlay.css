@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+.qo-vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(2, 5, 8, 0) 35%, rgba(2, 5, 8, 0.85) 100%);
+  opacity: 0;
+  transition: opacity 0.7s ease;
+  z-index: 9998;
+}
+
+.qo-vignette.qo-visible {
+  opacity: 1;
+}
+
+.qo-container {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.qo-text {
+  max-width: 28ch;
+  text-align: center;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: clamp(18px, 2.6vw, 30px);
+  letter-spacing: 0.06em;
+  color: #7BF7FF;
+  text-shadow: 0 0 24px rgba(34, 229, 255, 0.5);
+  line-height: 1.5;
+}
+
+.qo-text .qo-letter {
+  opacity: 0;
+  filter: blur(6px);
+  transition: opacity 0.4s ease, filter 0.4s ease;
+}
+
+.qo-text .qo-letter.qo-in {
+  opacity: 1;
+  filter: blur(0);
+}
+
+.qo-text.qo-fading .qo-letter {
+  opacity: 0;
+  filter: blur(6px);
+  transition: opacity 0.7s ease, filter 0.7s ease;
+}
+
+.qo-dots {
+  margin-top: 0.9em;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.9em;
+  letter-spacing: 0.3em;
+  color: #7BF7FF;
+  opacity: 0.55;
+  text-align: center;
+}
