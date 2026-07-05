@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>somnia filaments</title>
+  <link rel="stylesheet" href="./css/main.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <video id="cam" playsinline hidden></video>
+  <canvas id="stage"></canvas>
+  <div id="ui"></div>
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
