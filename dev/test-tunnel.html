@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>test — tunnel walls</title>
+  <style>
+    html, body { margin: 0; background: #020508; overflow: hidden; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #hud {
+      position: fixed; top: 12px; left: 12px; z-index: 10;
+      font: 12px/1.5 ui-monospace, Menlo, monospace; color: #7BF7FF;
+    }
+    #hud button {
+      background: #0A3540; color: #22E5FF; border: 1px solid #22E5FF;
+      padding: 6px 10px; margin-right: 6px; cursor: pointer;
+      font: inherit; border-radius: 2px;
+    }
+    #hud button:hover { background: #22E5FF; color: #020508; }
+    #fps { position: fixed; top: 12px; right: 12px; z-index: 10;
+      font: 12px ui-monospace, monospace; color: #7BF7FF; }
+    #qlabel { margin-left: 8px; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="hud">
+    <button id="ring">emit ring</button>
+    <button id="dim">dim</button>
+    <button id="quality">quality toggle</button>
+    <span id="qlabel">quality: 1.0</span>
+  </div>
+  <div id="fps">-- fps</div>
+  <canvas id="stage"></canvas>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { Tunnel } from '../js/tunnel.js';
+    import { TUNNEL } from '../js/config.js';
+
+    const canvas = document.getElementById('stage');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setClearColor(0x020508);
+
+    const scene = new THREE.Scene();
+    // Fixed camera at origin looking down -Z, into the tunnel.
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 120);
+    camera.position.set(0, 0, 0);
+    camera.lookAt(0, 0, -1);
+
+    const tunnel = new Tunnel(scene);
+
+    function onResize() {
+      const w = window.innerWidth, h = window.innerHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', onResize);
+    onResize();
+
+    // Controls.
+    let quality = 1.0;
+    document.getElementById('ring').addEventListener('click', () => {
+      // Born just ahead of the camera, travels into -Z.
+      tunnel.emitRing(-6, 1.0);
+    });
+    document.getElementById('dim').addEventListener('click', () => {
+      tunnel.setDim(1.0);
+    });
+    document.getElementById('quality').addEventListener('click', () => {
+      quality = (quality === 1.0) ? 0.6 : 1.0;
+      tunnel.setQuality(quality);
+      document.getElementById('qlabel').textContent = 'quality: ' + quality.toFixed(1);
+    });
+
+    // Rolling 60-frame fps average.
+    const fpsEl = document.getElementById('fps');
+    const frames = [];
+    let last = performance.now();
+
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+
+      tunnel.update(dt, now / 1000);
+      renderer.render(scene, camera);
+
+      frames.push(dt);
+      if (frames.length > 60) frames.shift();
+      const avg = frames.reduce((a, b) => a + b, 0) / frames.length;
+      fpsEl.textContent = (1 / avg).toFixed(0) + ' fps';
+    }
+    requestAnimationFrame((t) => { last = t; animate(t); });
+  </script>
+</body>
+</html>
