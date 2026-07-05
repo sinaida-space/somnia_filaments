@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>tracking test</title>
+  <style>
+    body { margin: 0; background: #020508; color: #22E5FF; font: 13px/1.5 monospace; }
+    .wrap { display: flex; gap: 16px; padding: 16px; flex-wrap: wrap; }
+    .stage { position: relative; width: 480px; height: 360px; background: #0A3540; border: 1px solid #22E5FF; }
+    #cam { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 0.55; }
+    #overlay { position: absolute; inset: 0; }
+    .panel { min-width: 220px; }
+    .dot { position: absolute; width: 14px; height: 14px; border-radius: 50%; margin: -7px 0 0 -7px; }
+    .hand { background: #22E5FF; box-shadow: 0 0 10px #22E5FF; }
+    .head { background: #FF4D6D; box-shadow: 0 0 10px #FF4D6D; }
+    button { font: inherit; background: #0A3540; color: #22E5FF; border: 1px solid #22E5FF; padding: 6px 12px; cursor: pointer; }
+    .row { display: flex; justify-content: space-between; }
+    .k { color: #7BF7FF; }
+    #status { margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="stage">
+      <video id="cam" playsinline muted></video>
+      <div id="overlay">
+        <div id="dotHand" class="dot hand" style="display:none"></div>
+        <div id="dotHead" class="dot head" style="display:none"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div id="status">initializing…</div>
+      <div class="row"><span class="k">mode</span><span id="vMode">–</span></div>
+      <div class="row"><span class="k">procMs</span><span id="vProc">–</span></div>
+      <div class="row"><span class="k">hand.x</span><span id="vHx">–</span></div>
+      <div class="row"><span class="k">hand.y</span><span id="vHy">–</span></div>
+      <div class="row"><span class="k">hand.present</span><span id="vHp">–</span></div>
+      <div class="row"><span class="k">head.x</span><span id="vEx">–</span></div>
+      <div class="row"><span class="k">head.y</span><span id="vEy">–</span></div>
+      <div class="row"><span class="k">head.z (zM)</span><span id="vEz">–</span></div>
+      <div class="row"><span class="k">head.present</span><span id="vEp">–</span></div>
+      <p><button id="toggle">mode: full → hand-only</button></p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { Tracking } from '../js/tracking.js';
+
+    const tracking = new Tracking();
+    const video = document.getElementById('cam');
+    const stage = document.querySelector('.stage');
+    const dotHand = document.getElementById('dotHand');
+    const dotHead = document.getElementById('dotHead');
+    const $ = (id) => document.getElementById(id);
+
+    function place(dot, nx, ny, show) {
+      // nx/ny in -1..1; map to stage box (already mirrored in tracking output).
+      dot.style.display = show ? 'block' : 'none';
+      dot.style.left = ((nx * 0.5 + 0.5) * stage.clientWidth) + 'px';
+      dot.style.top = ((ny * 0.5 + 0.5) * stage.clientHeight) + 'px';
+    }
+
+    // Head is metric — normalize x/y roughly to the box for a live dot.
+    function headToNorm(head) {
+      // ~±0.2m lateral maps to full width at typical distances.
+      return { x: Math.max(-1, Math.min(1, head.x / 0.2)),
+               y: Math.max(-1, Math.min(1, head.y / 0.15)) };
+    }
+
+    document.getElementById('toggle').addEventListener('click', () => {
+      const next = tracking.mode === 'full' ? 'hand-only' : 'full';
+      tracking.setMode(next);
+      document.getElementById('toggle').textContent =
+        next === 'full' ? 'mode: full → hand-only' : 'mode: hand-only → full';
+    });
+
+    function loop() {
+      const s = tracking.poll();
+      $('vMode').textContent = s.mode;
+      $('vProc').textContent = s.procMs.toFixed(2);
+      $('vHx').textContent = s.hand.x.toFixed(3);
+      $('vHy').textContent = s.hand.y.toFixed(3);
+      $('vHp').textContent = s.hand.present;
+      $('vEx').textContent = s.head.x.toFixed(3);
+      $('vEy').textContent = s.head.y.toFixed(3);
+      $('vEz').textContent = s.head.z.toFixed(3);
+      $('vEp').textContent = s.head.present;
+      place(dotHand, s.hand.x, s.hand.y, s.hand.present);
+      const hn = headToNorm(s.head);
+      place(dotHead, hn.x, hn.y, true);
+      requestAnimationFrame(loop);
+    }
+
+    tracking.init(video)
+      .then(() => { $('status').textContent = 'ready'; loop(); })
+      .catch((e) => { $('status').textContent = 'init failed: ' + (e && e.code ? e.code : e); });
+  </script>
+</body>
+</html>
