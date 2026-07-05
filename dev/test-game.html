@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>test: game core</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/"
+    }
+  }
+  </script>
+  <style>
+    html, body {
+      margin: 0;
+      background: #020508;
+      overflow: hidden;
+      font-family: monospace;
+      color: #7BF7FF;
+    }
+    canvas { display: block; width: 100%; height: 100%; }
+    #hud {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      font-size: 13px;
+      line-height: 1.5;
+      background: rgba(2, 5, 8, 0.6);
+      padding: 8px 12px;
+      border: 1px solid #0A3540;
+      pointer-events: none;
+    }
+    #log {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      right: 10px;
+      max-height: 140px;
+      overflow-y: auto;
+      font-size: 11px;
+      background: rgba(2, 5, 8, 0.6);
+      border: 1px solid #0A3540;
+      padding: 6px 10px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <div id="hud">
+    <div>fps: <span id="fps">--</span></div>
+    <div>blocksBroken: <span id="blocksBroken">0</span> / <span id="blocksTotal">0</span></div>
+    <div>misses: <span id="misses">0</span></div>
+  </div>
+  <div id="log"></div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { PALETTE, TUNNEL } from '../js/config.js';
+    import { bus } from '../js/events.js';
+    import { Game } from '../js/game.js';
+
+    const canvas = document.getElementById('stage');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setClearColor(PALETTE.void);
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 200);
+    camera.position.set(0, 0, 0);
+
+    // placeholder wireframe cylinder standing in for the tunnel shader (Task 3)
+    const tunnelGeo = new THREE.CylinderGeometry(TUNNEL.radius, TUNNEL.radius, TUNNEL.length, 32, 16, true);
+    const tunnelMat = new THREE.MeshBasicMaterial({ color: PALETTE.dim, wireframe: true });
+    const tunnelMesh = new THREE.Mesh(tunnelGeo, tunnelMat);
+    tunnelMesh.rotation.x = Math.PI / 2;
+    tunnelMesh.position.z = -TUNNEL.length / 2;
+    scene.add(tunnelMesh);
+
+    function onResize() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', onResize);
+    onResize();
+
+    // --- game wiring ---
+    const game = new Game(scene, bus);
+    game.start();
+
+    // mouse -> setPaddleTarget (-1..1 normalized)
+    window.addEventListener('mousemove', (e) => {
+      const nx = (e.clientX / window.innerWidth) * 2 - 1;
+      const ny = -((e.clientY / window.innerHeight) * 2 - 1);
+      game.setPaddleTarget(nx, ny);
+    });
+
+    // --- HUD + logging ---
+    const logEl = document.getElementById('log');
+    function logLine(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      logEl.appendChild(div);
+      while (logEl.children.length > 30) logEl.removeChild(logEl.firstChild);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    bus.on('block:broken', (data) => {
+      console.log('block:broken', data);
+      logLine(`block:broken id=${data.blockId} q=${data.questionIndex} pos=(${data.pos.x.toFixed(2)}, ${data.pos.y.toFixed(2)}, ${data.pos.z.toFixed(2)})`);
+    });
+    bus.on('ball:miss', (data) => {
+      console.log('ball:miss', data);
+      logLine(`ball:miss misses=${data.misses}`);
+    });
+
+    const blocksBrokenEl = document.getElementById('blocksBroken');
+    const blocksTotalEl = document.getElementById('blocksTotal');
+    const missesEl = document.getElementById('misses');
+    const fpsEl = document.getElementById('fps');
+
+    let lastTime = performance.now();
+    const frameTimes = [];
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const now = performance.now();
+      const dt = Math.min((now - lastTime) / 1000, 0.1);
+      lastTime = now;
+
+      game.update(dt);
+      renderer.render(scene, camera);
+
+      blocksBrokenEl.textContent = game.stats.blocksBroken;
+      blocksTotalEl.textContent = game.stats.blocksTotal;
+      missesEl.textContent = game.stats.misses;
+
+      frameTimes.push(now);
+      while (frameTimes.length > 60) frameTimes.shift();
+      if (frameTimes.length > 1) {
+        const span = (frameTimes[frameTimes.length - 1] - frameTimes[0]) / 1000;
+        const fps = span > 0 ? (frameTimes.length - 1) / span : 0;
+        fpsEl.textContent = fps.toFixed(0);
+      }
+    }
+    animate();
+  </script>
+</body>
+</html>
