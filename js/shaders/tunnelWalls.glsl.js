@@ -1,13 +1,20 @@
-// Tunnel walls shader — turbulent electric-cyan light filaments on near-black.
+// Tunnel walls shader — sparse glowing cyan filaments on a near-black void.
 //
-// Look: long-exposure light-painting. Ridged, domain-warped value-noise fbm,
-// stretched heavily along z (anisotropic sampling), sharpened with pow(), and
-// turned into additive glow via exponential falloff. No postprocessing bloom —
-// the glow is baked into the fragment math so we stay single-pass at 60fps.
+// Look: "space noir dreamcore". The wall is a dark field (uColVoid dominates the
+// frame at rest); a small set of helical filaments wound along the tunnel's Z
+// axis are the only bright things. Each filament is an analytic curve on the
+// cylinder wall — angle advances linearly with depth (a helix) plus a little
+// sinusoidal wander so it reads hand-drawn rather than machined. Per fragment we
+// measure arc-length distance to each filament centreline and turn it into a
+// thin hot core plus a soft exponential halo (exp(-d*k)) — the same crisp-core /
+// additive-falloff family as a glowing constellation edge. All glow is baked in
+// the fragment math: single pass, no postprocessing bloom.
 //
-// Cost note: the fbm loop dominates the frame. Octave count is compile-time
-// bounded (MAX_OCTAVES) and gated at runtime by uQuality so we can trade
-// fidelity for speed on weaker GPUs without recompiling.
+// Why analytic helices, not thresholded fbm: the void between filaments is
+// exactly zero, so the frame is provably dark-dominant and the "how many bright
+// traces exist" count is a constant (FIL_COUNT), not an emergent property of a
+// noise band. Cost is a small fixed loop; uQuality trims the filament count and
+// skips the grain for weaker GPUs.
 
 export const vert = /* glsl */`
   varying vec3 vWorldPos;
@@ -25,106 +32,137 @@ export const frag = /* glsl */`
   varying vec3 vWorldPos;
 
   uniform float uTime;
-  uniform vec3  uRings[4];   // per ring: (bornZ, birthTime, strength); strength<=0 == inactive
-  uniform float uDim;        // 0..1 momentary darkening
-  uniform float uQuality;    // 1.0 (5 octaves) | 0.6 (3 octaves)
-  uniform vec3  uColFilament;
-  uniform vec3  uColGlow;
-  uniform vec3  uColVoid;
+  uniform vec3  uRings[4];    // per ring: (bornZ, birthTime, strength); strength<=0 == inactive
+  uniform float uDim;         // 0..1 momentary darkening
+  uniform float uQuality;     // 1.0 (6 filaments + grain) | 0.6 (3 filaments, no grain)
+  uniform vec3  uColFilament; // hot core colour (electric cyan)
+  uniform vec3  uColGlow;     // soft halo colour (pale cyan)
+  uniform vec3  uColVoid;     // near-black background
 
-  #define MAX_OCTAVES 5
-  #define RING_SPEED 10.0    // world units / sec toward -Z
-  #define RING_WIDTH 1.5     // world units
-  #define RING_LIFE  2.5     // seconds
+  #define FIL_MAX     6
+  #define TWO_PI      6.2831853
+  #define RING_SPEED  10.0    // world units / sec toward -Z
+  #define RING_WIDTH  1.5     // world units
+  #define RING_LIFE   2.5     // seconds
+  #define TUNNEL_R    3.0     // cylinder radius (matches config TUNNEL.radius)
 
-  // Cheap hash -> value noise. Deliberately not simplex: this is the hot path.
-  float hash(vec3 p) {
-    return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+  // Cheap hash for the film grain only (filaments are analytic, no noise).
+  float hash21(vec2 p) {
+    p = fract(p * vec2(123.34, 345.45));
+    p += dot(p, p + 34.345);
+    return fract(p.x * p.y);
   }
 
-  float valueNoise(vec3 p) {
-    vec3 i = floor(p);
-    vec3 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);           // smoothstep interpolant
-    // 8 corner samples of the unit cell.
-    float n000 = hash(i + vec3(0.0, 0.0, 0.0));
-    float n100 = hash(i + vec3(1.0, 0.0, 0.0));
-    float n010 = hash(i + vec3(0.0, 1.0, 0.0));
-    float n110 = hash(i + vec3(1.0, 1.0, 0.0));
-    float n001 = hash(i + vec3(0.0, 0.0, 1.0));
-    float n101 = hash(i + vec3(1.0, 0.0, 1.0));
-    float n011 = hash(i + vec3(0.0, 1.0, 1.0));
-    float n111 = hash(i + vec3(1.0, 1.0, 1.0));
-    float nx00 = mix(n000, n100, f.x);
-    float nx10 = mix(n010, n110, f.x);
-    float nx01 = mix(n001, n101, f.x);
-    float nx11 = mix(n011, n111, f.x);
-    float nxy0 = mix(nx00, nx10, f.y);
-    float nxy1 = mix(nx01, nx11, f.y);
-    return mix(nxy0, nxy1, f.z);
+  // Per-filament constants, spread around the tube. Returned as
+  // (phase0, twist, wanderAmp, wanderFreq).
+  vec4 filamentParams(int k) {
+    // Deterministic but irregular spacing so the filaments don't sit on a
+    // perfect lattice. Values chosen by hand for a pleasant scatter.
+    float fk = float(k);
+    float phase0    = fk * 2.3999632;               // golden-angle-ish spread around the tube
+    float twist     = 0.22 + 0.10 * sin(fk * 1.7);  // radians of angle per world-unit of z
+    float wanderAmp = 0.28 + 0.14 * fract(fk * 0.618);
+    float wanderFreq= 0.35 + 0.12 * fract(fk * 1.371);
+    return vec4(phase0, twist, wanderAmp, wanderFreq);
   }
 
-  // Ridged fbm: each octave folded to a ridge (1 - |2n-1|), accumulated.
-  // octaveLimit is the runtime-active count; the loop bound stays constant.
-  float ridgedFbm(vec3 p, int octaveLimit) {
-    float sum = 0.0;
-    float amp = 0.55;
-    float freq = 1.0;
-    for (int o = 0; o < MAX_OCTAVES; o++) {
-      if (o >= octaveLimit) break;
-      float n = valueNoise(p * freq);
-      float ridge = 1.0 - abs(2.0 * n - 1.0);  // ridge in 0..1
-      sum += ridge * amp;
-      freq *= 2.0;
-      amp  *= 0.5;
-    }
-    return sum;
+  // Smallest absolute wrapped angular difference in [0, PI].
+  float angDiff(float a, float b) {
+    float d = mod(a - b + 3.14159265, TWO_PI) - 3.14159265;
+    return abs(d);
+  }
+
+  // Per-filament temporal phase seed so their wander desyncs.
+  float filSeed(int k) {
+    return float(k) * 2.399963;
   }
 
   void main() {
-    int octaves = (uQuality >= 0.8) ? 5 : 3;
+    // Active filament count by quality (loop bound stays constant).
+    int filCount = (uQuality >= 0.8) ? 6 : 3;
 
-    // Anisotropic sample coords: compress z so features stretch into long
-    // filament streaks down the tunnel; the drift term slides them toward -Z.
-    vec3 base = vec3(vWorldPos.xy * 2.2, vWorldPos.z * 0.35);
-    vec3 sp = base;
-    sp.z -= uTime * 0.6;
+    // Cylinder-wall coordinates: angle around the tube, and depth (world z).
+    float ang = atan(vWorldPos.y, vWorldPos.x);   // -PI..PI
+    float z   = vWorldPos.z;                        // 0 (near) .. -length (far)
 
-    // Domain warp: perturb the sample by a low-freq ridged field for the
-    // wandering, hand-painted quality.
-    float warp = ridgedFbm(sp * 0.5, octaves);
-    sp += vec3(warp * 0.9, warp * 0.9, warp * 0.4);
+    // A gentle global drift of the whole filament bundle toward the camera,
+    // so the network appears to flow past you down the tunnel.
+    float flow = uTime * 0.25;
 
-    float f = ridgedFbm(sp, octaves);
+    float core = 0.0;   // thin hot centreline accumulator
+    float halo = 0.0;   // soft additive falloff accumulator
 
-    // Sharpen ridges into thin bright filaments.
-    float fil = pow(clamp(f, 0.0, 1.0), 4.5);
+    for (int k = 0; k < FIL_MAX; k++) {
+      if (k >= filCount) break;
+      vec4 fp = filamentParams(k);
+      float phase0    = fp.x;
+      float twist     = fp.y;
+      float wanderAmp = fp.z;
+      float wanderFreq= fp.w;
 
-    // Exponential glow falloff around the sharpened filaments -> soft additive halo.
-    float glow = fil + pow(clamp(f, 0.0, 1.0), 2.0) * 0.25;
+      // Helix angle at this depth, plus slow sinusoidal wander + global flow.
+      float filAng = phase0
+                   + z * twist
+                   + wanderAmp * sin(z * wanderFreq + uTime * 0.6 + filSeed(k))
+                   + flow;
 
-    vec3 col = uColFilament * fil * 2.2 + uColGlow * glow * 0.6;
+      // Arc-length distance from this fragment to the filament centreline.
+      float dAng = angDiff(ang, filAng);
+      float dArc = dAng * TUNNEL_R;   // radians -> world arc length on the wall
 
-    // Ring pulses: bright bands travelling toward -Z, additive over filaments.
+      // Crisp hot core: sub-pixel-thin bright centreline.
+      core += 1.0 - smoothstep(0.0, 0.045, dArc);
+      // Soft exponential halo radiating outward from the core.
+      halo += exp(-dArc * 6.0);
+    }
+
+    // Compose: hot near-white core drives the filament colour; halo is the
+    // softer pale-cyan bloom. Everything not near a filament stays ~0 here.
+    vec3 col = uColFilament * core * 1.6
+             + uColGlow     * halo * 0.55;
+
+    // Ring pulses: bright bands travelling toward -Z. They only light where the
+    // filament network already is (band * halo), so a pulse reads as a glow
+    // surge racing along the traces rather than a solid disc.
     for (int r = 0; r < 4; r++) {
       float strength = uRings[r].z;
       if (strength <= 0.0) continue;
       float age = uTime - uRings[r].y;
       if (age < 0.0 || age > RING_LIFE) continue;
       float ringZ = uRings[r].x - age * RING_SPEED;
-      float band = 1.0 - smoothstep(0.0, RING_WIDTH, abs(vWorldPos.z - ringZ));
-      float fade = 1.0 - (age / RING_LIFE);
-      col += uColGlow * band * fade * strength * 1.6;
+      float band  = 1.0 - smoothstep(0.0, RING_WIDTH, abs(z - ringZ));
+      float fade  = 1.0 - (age / RING_LIFE);
+      // Surge the filaments here, plus a faint void-fill so the band is
+      // perceptible even in the gaps between traces.
+      col += uColGlow * band * fade * strength * (halo * 1.4 + 0.06);
     }
 
-    // Depth fog: mix to void with 1 - exp(-0.03 * dist). Camera sits at origin,
-    // so world distance ~= length(vWorldPos).
+    // Depth fade: far filaments desaturate and sink toward the void rather than
+    // snapping to pure cyan-to-black. Camera sits at origin, dist ~= |worldPos|.
     float dist = length(vWorldPos);
-    float fog = 1.0 - exp(-0.03 * dist);
+    float fog  = 1.0 - exp(-0.045 * dist);
+    // Slight desaturation toward the fog limit (noir, not neon).
+    float lum  = dot(col, vec3(0.299, 0.587, 0.114));
+    col = mix(col, vec3(lum), fog * 0.4);
     col = mix(col, uColVoid, fog);
+
+    // Radial vignette: fragments whose screen-projected direction points away
+    // from the tunnel axis (-Z) sit at the frame edge. Use the angle between the
+    // view direction and the axis as a cheap vignette proxy.
+    vec3 viewDir = normalize(vWorldPos);      // camera at origin
+    float axial  = -viewDir.z;                 // 1 straight ahead, ->0 at edges
+    float vign    = smoothstep(-0.15, 0.85, axial);
+    col *= mix(0.55, 1.0, vign);
 
     // Momentary darkening (miss feedback).
     col *= (1.0 - uDim * 0.85);
+
+    // Restrained film grain (skipped on low quality). Animated per frame, very
+    // low opacity, and scaled by local brightness so the void stays clean.
+    if (uQuality >= 0.8) {
+      float g = hash21(gl_FragCoord.xy + fract(uTime) * 91.7);
+      col += (g - 0.5) * 0.03 * (0.4 + col);
+    }
 
     // Lift toward void so the darkest walls are near-black, never pure 0.
     col += uColVoid;
