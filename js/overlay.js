@@ -1,6 +1,6 @@
-const FADE_IN_WINDOW_MS = 800;
+const TYPE_CHAR_MS = 32;
 const HOLD_MS = 3500;
-const FADE_OUT_MS = 700;
+const FADE_OUT_MS = 600;
 const TIER_DOTS = { 1: '·', 2: '··', 3: '···' };
 
 export class QuestionOverlay {
@@ -15,52 +15,74 @@ export class QuestionOverlay {
     this.container.className = 'qo-container';
     this.root.appendChild(this.container);
 
-    this.textEl = document.createElement('div');
+    this.panel = document.createElement('div');
+    this.panel.className = 'qo-panel';
+    this.container.appendChild(this.panel);
+
+    this.titlebar = document.createElement('div');
+    this.titlebar.className = 'qo-titlebar';
+    this.titlebar.textContent = 'somnia://question';
+    this.panel.appendChild(this.titlebar);
+
+    this.body = document.createElement('div');
+    this.body.className = 'qo-body';
+    this.panel.appendChild(this.body);
+
+    this.promptEl = document.createElement('span');
+    this.promptEl.className = 'qo-prompt';
+    this.promptEl.textContent = 'C:\\SOMNIA> ';
+    this.body.appendChild(this.promptEl);
+
+    this.textEl = document.createElement('span');
     this.textEl.className = 'qo-text';
-    this.container.appendChild(this.textEl);
+    this.body.appendChild(this.textEl);
+
+    this.cursorEl = document.createElement('span');
+    this.cursorEl.className = 'qo-cursor';
+    this.cursorEl.textContent = '█';
+    this.body.appendChild(this.cursorEl);
 
     this.dotsEl = document.createElement('div');
     this.dotsEl.className = 'qo-dots';
-    this.container.appendChild(this.dotsEl);
+    this.panel.appendChild(this.dotsEl);
   }
 
   async show(text, index) {
     const question = typeof text === 'object' ? text.text : text;
     const tier = typeof text === 'object' ? text.tier : undefined;
 
-    this.textEl.classList.remove('qo-fading');
-    this.textEl.innerHTML = '';
+    this.panel.classList.remove('qo-fading');
+    this.textEl.textContent = '';
     this.dotsEl.textContent = tier ? TIER_DOTS[tier] || '' : '';
-
-    const letters = [...question].map((ch) => {
-      const span = document.createElement('span');
-      span.className = 'qo-letter';
-      span.textContent = ch === ' ' ? ' ' : ch;
-      this.textEl.appendChild(span);
-      return span;
-    });
+    this.cursorEl.classList.remove('qo-blink');
 
     this.vignette.classList.add('qo-visible');
+    this.panel.classList.add('qo-visible');
 
-    // force layout so the initial (blurred/opacity 0) state is committed
-    // before we start toggling classes for the stagger.
-    // eslint-disable-next-line no-unused-expressions
-    this.textEl.offsetHeight;
+    await this.typeText(question);
 
-    const staggerStep = letters.length > 1 ? FADE_IN_WINDOW_MS / (letters.length - 1) : 0;
-    letters.forEach((span, i) => {
-      setTimeout(() => span.classList.add('qo-in'), i * staggerStep);
-    });
+    this.cursorEl.classList.add('qo-blink');
 
-    await wait(FADE_IN_WINDOW_MS + HOLD_MS);
+    await wait(HOLD_MS);
 
-    this.textEl.classList.add('qo-fading');
+    this.panel.classList.add('qo-fading');
     this.vignette.classList.remove('qo-visible');
 
     await wait(FADE_OUT_MS);
 
-    this.textEl.innerHTML = '';
+    this.panel.classList.remove('qo-visible');
+    this.textEl.textContent = '';
     this.dotsEl.textContent = '';
+    this.cursorEl.classList.remove('qo-blink');
+  }
+
+  async typeText(question) {
+    const chars = [...question];
+    for (let i = 0; i < chars.length; i += 1) {
+      this.textEl.textContent += chars[i];
+      // eslint-disable-next-line no-await-in-loop
+      await wait(TYPE_CHAR_MS);
+    }
   }
 }
 
