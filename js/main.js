@@ -225,10 +225,13 @@ function wait(ms) {
 
 // ---- tracking wiring -------------------------------------------------------
 
+let lastTrackingSnapshot = null;
+
 function updateTracking() {
   if (!tracking.ready) return;
   const t = tracking.poll();
-  game.setPaddleTarget(t.hand.x, t.hand.y);
+  lastTrackingSnapshot = t;
+  if (t.hand.present) game.setPaddleTarget(t.hand.x, t.hand.y); // else hold last paddle target
   if (t.mode === 'full' && t.head.present) {
     offAxis.setEyePosition(t.head.x, t.head.y, t.head.z);
   }
@@ -267,6 +270,8 @@ function animate(nowMs) {
   offAxis.update();
 
   renderer.render(scene, offAxis.camera);
+
+  updateDebugHud();
 }
 
 requestAnimationFrame(animate);
@@ -280,7 +285,53 @@ window.addEventListener('keydown', (e) => {
     muted = !muted;
     audio.setMuted(muted);
   }
+  if (e.key === 'd' || e.key === 'D') {
+    toggleDebugHud();
+  }
 });
+
+// ---- debug readout (hidden by default, lazy-built on first 'd' press) ------
+
+let debugHud = null;
+let debugHudVisible = false;
+
+function toggleDebugHud() {
+  if (!debugHud) {
+    debugHud = document.createElement('div');
+    debugHud.id = 'debug-hud';
+    debugHud.style.position = 'fixed';
+    debugHud.style.top = '8px';
+    debugHud.style.left = '8px';
+    debugHud.style.zIndex = '99999';
+    debugHud.style.pointerEvents = 'none';
+    debugHud.style.fontFamily = "'IBM Plex Mono', ui-monospace, monospace";
+    debugHud.style.fontSize = '0.7rem';
+    debugHud.style.lineHeight = '1.3';
+    debugHud.style.color = PALETTE.filament;
+    debugHud.style.opacity = '0.75';
+    debugHud.style.whiteSpace = 'pre';
+    (uiRoot || document.body).appendChild(debugHud);
+  }
+  debugHudVisible = !debugHudVisible;
+  debugHud.style.display = debugHudVisible ? 'block' : 'none';
+}
+
+function updateDebugHud() {
+  if (!debugHud || !debugHudVisible) return;
+  const t = lastTrackingSnapshot;
+  const fps = fpsSamples.length ? fpsSamples[fpsSamples.length - 1] : 0;
+  if (!t) {
+    debugHud.textContent = 'tracking: not ready';
+    return;
+  }
+  debugHud.textContent =
+    `hand x: ${t.hand.x.toFixed(2)}\n` +
+    `hand y: ${t.hand.y.toFixed(2)}\n` +
+    `hand.present: ${t.hand.present}\n` +
+    `mode: ${t.mode}\n` +
+    `procMs: ${t.procMs.toFixed(1)}\n` +
+    `fps: ${fps.toFixed(1)}`;
+}
 
 // ---- boot -------------------------------------------------------------
 
