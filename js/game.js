@@ -120,15 +120,36 @@ export class Game {
 
   _buildPaddle() {
     const geo = new THREE.BoxGeometry(GAMEPLAY.paddleHalfW * 2, GAMEPLAY.paddleHalfH * 2, 0.1);
-    // rounded-box stand-in: thin box, semi-transparent cyan
+    // Tron plate: dim translucent fill, so the glowing edge reads as the object.
     const mat = new THREE.MeshBasicMaterial({
       color: PALETTE.filament,
       transparent: true,
-      opacity: 0.55
+      opacity: 0.30
     });
     this.paddleMesh = new THREE.Mesh(geo, mat);
     this.paddleMesh.position.set(0, 0, GAMEPLAY.paddleZ);
     this.scene.add(this.paddleMesh);
+
+    // Crisp bright edge outline (Tron rim).
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(geo),
+      new THREE.LineBasicMaterial({ color: PALETTE.glow, transparent: true, opacity: 0.95 })
+    );
+    this.paddleMesh.add(edges);
+
+    // Slight bloom: a larger additive halo plane behind the plate, no post-processing.
+    const halo = new THREE.Mesh(
+      new THREE.PlaneGeometry(GAMEPLAY.paddleHalfW * 2.6, GAMEPLAY.paddleHalfH * 2.8),
+      new THREE.MeshBasicMaterial({
+        color: PALETTE.glow,
+        transparent: true,
+        opacity: 0.14,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      })
+    );
+    halo.position.z = -0.06; // just behind the plate
+    this.paddleMesh.add(halo);
   }
 
   _buildBall() {
