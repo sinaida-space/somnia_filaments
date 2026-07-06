@@ -65,28 +65,49 @@
   outline: none;
 }
 
+/* guide dot — the target to follow: hollow ring, bright filament cyan */
 .calib-dot {
   position: fixed;
-  width: 1.1rem;
-  height: 1.1rem;
+  width: 1.4rem;
+  height: 1.4rem;
   border-radius: 50%;
-  background: #22E5FF;
-  box-shadow: 0 0 1.2rem 0.2rem rgba(34, 229, 255, 0.6);
+  background: transparent;
+  border: 0.18rem solid #22E5FF;
+  box-shadow: 0 0 1.4rem 0.25rem rgba(34, 229, 255, 0.7);
   transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 1001;
 }
 
+/* hand dot — where your hand is: small filled dot, dimmer glow tone */
 .calib-hand {
   position: fixed;
-  width: 0.6rem;
-  height: 0.6rem;
+  width: 0.5rem;
+  height: 0.5rem;
   border-radius: 50%;
   background: #7BF7FF;
-  opacity: 0.7;
+  box-shadow: 0 0 0.4rem 0.05rem rgba(123, 247, 255, 0.5);
+  opacity: 0.9;
   transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 1001;
+}
+
+.calib-hand-label {
+  position: fixed;
+  font-family: 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  color: #7BF7FF;
+  text-transform: lowercase;
+  transform: translate(-50%, 0.9rem);
+  pointer-events: none;
+  z-index: 1001;
+}
+
+.calib-subline {
+  font-size: 0.75rem;
+  opacity: 0.5;
 }
 
 .calib-video {

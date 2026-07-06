@@ -9,6 +9,38 @@ const CIRCLE_DURATION_MS = 12000;
 const CIRCLE_RADIUS_VMIN = 30;
 const PRESENCE_THRESHOLD = 0.7;
 const PARALLAX_DURATION_MS = 2000;
+const MIN_SPAN = 0.30;
+
+// Widens [min,max] to at least MIN_SPAN, centered on the original midpoint,
+// then clamps into [0,1] by shifting (never crushing) the band. Falls back
+// to a centered MIN_SPAN band if the axis is degenerate/inverted (min>=max).
+function widenAxis(min, max) {
+  if (!(min < max)) {
+    return { min: 0.5 - MIN_SPAN / 2, max: 0.5 + MIN_SPAN / 2 };
+  }
+  const span = max - min;
+  if (span >= MIN_SPAN) return { min, max };
+  const mid = (min + max) / 2;
+  let lo = mid - MIN_SPAN / 2;
+  let hi = mid + MIN_SPAN / 2;
+  if (lo < 0) {
+    hi += -lo;
+    lo = 0;
+  }
+  if (hi > 1) {
+    lo -= (hi - 1);
+    hi = 1;
+  }
+  lo = Math.max(0, lo);
+  hi = Math.min(1, hi);
+  return { min: lo, max: hi };
+}
+
+function applyMinSpanGuard(range) {
+  const x = widenAxis(range.minX, range.maxX);
+  const y = widenAxis(range.minY, range.maxY);
+  return { minX: x.min, maxX: x.max, minY: y.min, maxY: y.max };
+}
 
 function vmin(pct) {
   return (Math.min(window.innerWidth, window.innerHeight) * pct) / 100;
@@ -82,12 +114,19 @@ async function initCamera(tracking, rootEl, videoEl) {
 function runHandCircleOnce(rootEl, tracking) {
   return new Promise((resolve) => {
     const { root } = makeScreen(rootEl);
-    const line = el('p', 'calib-line', 'follow it with your open hand');
+    const line = el('p', 'calib-line', 'calibrating — trace the circle with your open hand');
     line.style.position = 'fixed';
-    line.style.top = '12%';
+    line.style.top = '10%';
     line.style.left = '50%';
     line.style.transform = 'translateX(-50%)';
     root.appendChild(line);
+
+    const subline = el('p', 'calib-line calib-subline', 'this sets how far the paddle reaches');
+    subline.style.position = 'fixed';
+    subline.style.top = '15%';
+    subline.style.left = '50%';
+    subline.style.transform = 'translateX(-50%)';
+    root.appendChild(subline);
 
     const dot = el('div', 'calib-dot');
     root.appendChild(dot);
@@ -95,6 +134,9 @@ function runHandCircleOnce(rootEl, tracking) {
     const handDot = el('div', 'calib-hand');
     handDot.style.opacity = '0';
     root.appendChild(handDot);
+    const handLabel = el('div', 'calib-hand-label', 'you');
+    handLabel.style.opacity = '0';
+    root.appendChild(handLabel);
 
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     let samples = 0;
@@ -123,15 +165,21 @@ function runHandCircleOnce(rootEl, tracking) {
       const rawY = snap.hand && snap.hand.rawY;
       if (snap.hand && snap.hand.present && rawX !== undefined) {
         presentSamples += 1;
-        handDot.style.opacity = '0.7';
-        handDot.style.left = `${(snap.hand.x * 0.5 + 0.5) * window.innerWidth}px`;
-        handDot.style.top = `${(snap.hand.y * 0.5 + 0.5) * window.innerHeight}px`;
+        const hx = (snap.hand.x * 0.5 + 0.5) * window.innerWidth;
+        const hy = (snap.hand.y * 0.5 + 0.5) * window.innerHeight;
+        handDot.style.opacity = '0.9';
+        handDot.style.left = `${hx}px`;
+        handDot.style.top = `${hy}px`;
+        handLabel.style.opacity = '0.6';
+        handLabel.style.left = `${hx}px`;
+        handLabel.style.top = `${hy}px`;
         minX = Math.min(minX, rawX);
         maxX = Math.max(maxX, rawX);
         minY = Math.min(minY, rawY);
         maxY = Math.max(maxY, rawY);
       } else {
         handDot.style.opacity = '0';
+        handLabel.style.opacity = '0';
       }
 
       if (frac < 1) {
@@ -139,9 +187,12 @@ function runHandCircleOnce(rootEl, tracking) {
       } else {
         const presenceRatio = samples > 0 ? presentSamples / samples : 0;
         // Fallback is the full camera frame in 0..1 (raw) space, not -1..1.
-        const range = (minX === Infinity)
+        const rawRange = (minX === Infinity)
           ? { minX: 0, maxX: 1, minY: 0, maxY: 1 }
           : { minX, maxX, minY, maxY };
+        // Guard against a too-narrow captured reach amplifying small hand
+        // motions into full-swing jitter downstream in tracking._processHand.
+        const range = applyMinSpanGuard(rawRange);
         resolve({ range, presenceRatio });
       }
     }
