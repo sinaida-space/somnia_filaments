@@ -48,6 +48,9 @@ function potential(off, x, y, z, t) {
   return valueNoise3(x + off[0], y + off[1], z + off[2] + t * 0.05);
 }
 
+// Reused across every physics step so the hot loop allocates nothing.
+const _curlOut = new THREE.Vector3();
+
 function curl(pos, t) {
   const { x, y, z } = pos;
 
@@ -74,7 +77,7 @@ function curl(pos, t) {
   const dPydx = (pB_x1 - pB_x0) / (2 * EPS);
   const dPxdy = (pA_y1 - pA_y0) / (2 * EPS);
 
-  return new THREE.Vector3(
+  return _curlOut.set(
     dPzdy - dPydz,
     dPxdz - dPzdx,
     dPydx - dPxdy

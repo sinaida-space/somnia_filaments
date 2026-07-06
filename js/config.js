@@ -4,3 +4,16 @@ export const WORLD_PER_METER = 10;
 export const SCREEN = { widthM: 0.34, defaultEyeM: { x: 0, y: 0, z: 0.55 } };
 export const GAMEPLAY = { ballSpeed: 14, ballR: 0.25, paddleZ: -4, paddleHalfW: 0.9, paddleHalfH: 0.6,
                           blockR: 0.7, blockCount: 36, questionTarget: 12 };
+
+// Quality/degradation governor. Ladder is fixed: quality drop (step 1) before
+// hand-only tracking (step 2); the hand paddle never drops. main.js reads these
+// — no magic numbers there.
+export const PERF = {
+  fpsWindow: 90,          // rolling frames averaged for the fps estimate
+  lowFps: 55,             // below this (avg) → demote
+  highFps: 58,            // above this (avg) → recover
+  demoteHoldMs: 3000,     // sustained low-fps time before step 1 → step 2
+  recoverHoldMs: 5000,    // sustained high-fps time before each recovery step
+  reducedQuality: 0.6,    // tunnel quality at step 1
+  fullQuality: 1.0,       // tunnel quality at step 0
+};
