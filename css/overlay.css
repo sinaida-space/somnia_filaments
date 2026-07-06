@@ -36,9 +36,11 @@
 }
 
 .qo-text .qo-letter {
+  display: inline-block;
   opacity: 0;
   filter: blur(6px);
   transition: opacity 0.4s ease, filter 0.4s ease;
+  will-change: opacity, filter;
 }
 
 .qo-text .qo-letter.qo-in {

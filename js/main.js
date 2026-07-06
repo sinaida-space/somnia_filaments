@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PALETTE, TUNNEL, GAMEPLAY } from './config.js';
+import { PALETTE, TUNNEL, GAMEPLAY, PERF } from './config.js';
 import { bus } from './events.js';
 import { Game } from './game.js';
 import { Tunnel } from './tunnel.js';
@@ -60,7 +60,6 @@ onResize();
 
 // ---- quality governor (rolling 90-frame fps) ---------------------------
 
-const FPS_WINDOW = 90;
 const fpsSamples = [];
 let qualityStep = 0; // 0 = full quality/full tracking, 1 = tunnel reduced, 2 = hand-only
 let lowFpsSinceMs = null;
@@ -70,38 +69,38 @@ function updateQualityGovernor(dtReal, nowMs) {
   if (dtReal <= 0) return;
   const fps = 1 / dtReal;
   fpsSamples.push(fps);
-  if (fpsSamples.length > FPS_WINDOW) fpsSamples.shift();
-  if (fpsSamples.length < FPS_WINDOW) return;
+  if (fpsSamples.length > PERF.fpsWindow) fpsSamples.shift();
+  if (fpsSamples.length < PERF.fpsWindow) return;
 
   let sum = 0;
   for (let i = 0; i < fpsSamples.length; i++) sum += fpsSamples[i];
   const avgFps = sum / fpsSamples.length;
 
-  if (avgFps < 55) {
+  if (avgFps < PERF.lowFps) {
     if (lowFpsSinceMs === null) lowFpsSinceMs = nowMs;
     highFpsSinceMs = null;
 
     if (qualityStep === 0) {
-      tunnel.setQuality(0.6);
+      tunnel.setQuality(PERF.reducedQuality);
       qualityStep = 1;
-      lowFpsSinceMs = nowMs; // restart the 3s clock for the next step
-    } else if (qualityStep === 1 && nowMs - lowFpsSinceMs >= 3000) {
+      lowFpsSinceMs = nowMs; // restart the demote clock for the next step
+    } else if (qualityStep === 1 && nowMs - lowFpsSinceMs >= PERF.demoteHoldMs) {
       tracking.setMode('hand-only');
       qualityStep = 2;
     }
-  } else if (avgFps > 58) {
+  } else if (avgFps > PERF.highFps) {
     lowFpsSinceMs = null;
     if (highFpsSinceMs === null) highFpsSinceMs = nowMs;
 
-    if (qualityStep > 0 && nowMs - highFpsSinceMs >= 5000) {
+    if (qualityStep > 0 && nowMs - highFpsSinceMs >= PERF.recoverHoldMs) {
       if (qualityStep === 2) {
         tracking.setMode('full');
         qualityStep = 1;
       } else if (qualityStep === 1) {
-        tunnel.setQuality(1.0);
+        tunnel.setQuality(PERF.fullQuality);
         qualityStep = 0;
       }
-      highFpsSinceMs = nowMs; // require another clean 5s window per step
+      highFpsSinceMs = nowMs; // require another clean recovery window per step
     }
   } else {
     lowFpsSinceMs = null;

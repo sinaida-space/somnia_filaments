@@ -47,6 +47,11 @@ export class OffAxisCamera {
       e.z * WORLD_PER_METER
     );
 
+    // Frustum is only rebuilt when the eye or viewport actually moves. Both
+    // setters flip this; update() clears it. Saves a projection-matrix invert
+    // (raycast/cull read projectionMatrixInverse) on frames where nothing moved.
+    this._dirty = true;
+
     this.setViewport(window.innerWidth, window.innerHeight);
   }
 
@@ -58,6 +63,7 @@ export class OffAxisCamera {
     const heightWu = widthWu / aspect;
     this._screen.halfW = widthWu / 2;
     this._screen.halfH = heightWu / 2;
+    this._dirty = true;
   }
 
   // Eye position in METRES relative to screen centre, +z toward viewer.
@@ -67,11 +73,15 @@ export class OffAxisCamera {
       yM * WORLD_PER_METER,
       zM * WORLD_PER_METER
     );
+    this._dirty = true;
   }
 
   // Recompute the off-axis frustum + keep projectionMatrixInverse in sync
   // (raycasting / frustum culling read the inverse). Call once per frame.
   update() {
+    if (!this._dirty) return;
+    this._dirty = false;
+
     const ex = this._eye.x;
     const ey = this._eye.y;
     const ez = this._eye.z;
