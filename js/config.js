@@ -1,13 +1,16 @@
 export const PALETTE = { filament: '#22E5FF', glow: '#7BF7FF', void: '#020508', dim: '#0A3540' };
-export const TUNNEL = { radius: 3.0, length: 60, farZ: -58 };
+// T21-fix: zoom-out is done here (wider hall + content pushed back), NOT by
+// moving the eye — see SCREEN comment below for why that lever is backwards.
+export const TUNNEL = { radius: 4.2, length: 60, farZ: -58 };
 export const WORLD_PER_METER = 10;
-// Baseline eye→screen distance. Larger z = camera sits further back through the
-// window, so more of the tunnel is visible and it reads as further away. Bumped
-// from 0.55 → 0.85 (T21 zoom-out) — the tunnel was too in-your-face. The whole
-// head-z clamp band (HEADGAIN.zMin/zMax) moves with it so real head motion still
-// slews within a plausible band and the off-axis parallax/stability is preserved.
-export const SCREEN = { widthM: 0.34, defaultEyeM: { x: 0, y: 0, z: 0.85 } };
-export const GAMEPLAY = { ballSpeed: 14, ballR: 0.25, paddleZ: -4, paddleHalfW: 0.9, paddleHalfH: 0.6,
+// Baseline eye→screen distance. In a Kooima off-axis window, objects BEHIND the
+// screen plane (paddle, blocks, tunnel — everything here) get proportionally
+// LARGER as the eye moves back, not smaller: distance-to-paddle/distance-to-screen
+// = ez/(ez+|paddleZ|) → 1 as ez grows. T21 bumped this to 0.85 intending a
+// zoom-out and instead inflated the paddle. Reverted to 0.55; real zoom-out now
+// lives in TUNNEL.radius (wider hall) and GAMEPLAY.paddleZ (content pushed back).
+export const SCREEN = { widthM: 0.34, defaultEyeM: { x: 0, y: 0, z: 0.55 } };
+export const GAMEPLAY = { ballSpeed: 14, ballR: 0.25, paddleZ: -6.5, paddleHalfW: 0.9, paddleHalfH: 0.6,
                           blockR: 0.7, blockCount: 36, questionTarget: 12 };
 
 // Fishtank-VR head->view coupling. main.js reads these; no magic numbers inline.
@@ -18,8 +21,8 @@ export const GAMEPLAY = { ballSpeed: 14, ballR: 0.25, paddleZ: -4, paddleHalfW: 
 // micro-jitter/swim of the whole scene without lagging real head motion.
 export const HEADGAIN = {
   lateral: 1.6,     // gain on head x/y before setEyePosition (>1 amplifies parallax)
-  zMin: 0.60,       // clamp head z (metres) — plausible near bound (T21: band moved back with defaultEyeM.z)
-  zMax: 1.15,       // clamp head z (metres) — plausible far bound (T21: was 0.90)
+  zMin: 0.35,       // clamp head z (metres) — plausible near bound (reverted with defaultEyeM.z)
+  zMax: 0.90,       // clamp head z (metres) — plausible far bound (reverted with defaultEyeM.z)
   deadzoneM: 0.003, // ignore sub-3mm eye moves (kills static shimmer)
   slewPerSec: 4.0,  // max eye travel (metres/sec) toward target — anti-swim slew limit
 };
