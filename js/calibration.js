@@ -111,7 +111,10 @@ function renderCookieBanner(rootEl) {
   }, { once: true });
   banner.appendChild(text);
   banner.appendChild(btn);
-  rootEl.appendChild(banner);
+  // Append to <body>, not rootEl — the onboarding screens call makeScreen()
+  // which clears rootEl, which would otherwise wipe the banner immediately.
+  // The banner is position:fixed, so it sits correctly regardless of parent.
+  document.body.appendChild(banner);
 }
 
 function renderWaiting(rootEl, line) {
