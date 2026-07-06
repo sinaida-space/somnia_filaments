@@ -14,7 +14,6 @@ const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmar
 
 const PALM_IDS = [0, 5, 9, 13, 17];      // wrist + finger MCP joints -> palm centroid
 const REAL_IPD_M = 0.063;                 // average human interpupillary distance
-const PREDICT_S = 0.06;                    // 60ms velocity prediction for the hand
 const HAND_LOST_S = 0.5;                   // hold last hand value this long before present=false
 const EASE_S = 2.0;                        // head ease-to-default duration in hand-only mode
 const PROC_WINDOW = 90;                    // rolling frames for procMs mean
@@ -32,12 +31,17 @@ export class Tracking {
     this.lastTs = 0;          // strictly-increasing timestamp guard
     this.frameCount = 0;      // face runs on even frames only
 
-    // Hand One-Euro (normalized -1..1 space) + prediction state.
-    this.handFx = new OneEuroFilter(1.2, 0.03, 1.0);
-    this.handFy = new OneEuroFilter(1.2, 0.03, 1.0);
+    // Hand One-Euro (normalized -1..1 space).
+    // One-Euro: minCutoff 1.6 / beta 0.045 / dCutoff 1.0. Nudged up from
+    // 1.2/0.03 to trim latency now that the 60ms velocity prediction is gone —
+    // the prediction used to mask filter lag. Higher minCutoff lets slow motion
+    // track closer; slightly higher beta opens the cutoff on fast motion for
+    // responsiveness. Kept modest so quick hands don't reintroduce jitter.
+    this.handFx = new OneEuroFilter(1.6, 0.045, 1.0);
+    this.handFy = new OneEuroFilter(1.6, 0.045, 1.0);
     this.hand = { x: 0, y: 0, present: false };
     this.handLastSeen = -Infinity;
-    this.handPrevSmoothed = { x: 0, y: 0, t: 0 };
+    this.handPrevT = 0;   // last hand sample time, for One-Euro dt only
 
     // Head One-Euro (metric) + last valid detection.
     this.headFx = new OneEuroFilter(0.6, 0.02, 1.0);
@@ -191,23 +195,16 @@ export class Tracking {
       nx = Math.max(-1, Math.min(1, nx));
       ny = Math.max(-1, Math.min(1, ny));
 
-      const dt = this.hand.present ? Math.max(1e-3, nowS - this.handPrevSmoothed.t) : 1 / 30;
+      const dt = this.hand.present ? Math.max(1e-3, nowS - this.handPrevT) : 1 / 30;
       const sx = this.handFx.filter(nx, dt);
       const sy = this.handFy.filter(ny, dt);
 
-      // 60ms linear velocity prediction from smoothed positions.
-      let px = sx, py = sy;
-      if (this.hand.present) {
-        const vx = (sx - this.handPrevSmoothed.x) / dt;
-        const vy = (sy - this.handPrevSmoothed.y) / dt;
-        px = Math.max(-1, Math.min(1, sx + vx * PREDICT_S));
-        py = Math.max(-1, Math.min(1, sy + vy * PREDICT_S));
-      }
-
-      this.handPrevSmoothed = { x: sx, y: sy, t: nowS };
+      this.handPrevT = nowS;
+      // Output is the One-Euro smoothed value directly — no velocity prediction,
+      // so a single-frame raw jump can never overshoot past the smoothed value.
       // rawX/rawY: mirrored palm centroid in 0..1 image space, BEFORE range
       // mapping — calibration captures min/max of these to build handRange.
-      this.hand = { x: px, y: py, present: true, rawX: cx, rawY: cy };
+      this.hand = { x: sx, y: sy, present: true, rawX: cx, rawY: cy };
       this.handLastSeen = nowS;
     } else {
       // Lost: hold last value; drop present only after > 0.5s.
