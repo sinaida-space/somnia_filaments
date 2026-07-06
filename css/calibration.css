@@ -128,3 +128,117 @@
 .calib-fade.calib-visible {
   opacity: 1;
 }
+
+/* subtle link to the artist's site, shown on the arrival/welcome screen */
+.calib-artist-link {
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  color: #7BF7FF;
+  opacity: 0.55;
+  text-decoration: none;
+  text-transform: lowercase;
+  border-bottom: 1px solid rgba(123, 247, 255, 0.35);
+  transition: opacity 0.2s ease;
+}
+
+.calib-artist-link:hover,
+.calib-artist-link:focus-visible {
+  opacity: 0.9;
+}
+
+/* honest cookie notice — dismiss-only, no storage, fixed to the bottom */
+.calib-cookie-banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1.25rem;
+  background: rgba(2, 5, 8, 0.92);
+  border-top: 1px solid rgba(34, 229, 255, 0.25);
+  font-family: 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+  z-index: 1002;
+}
+
+.calib-cookie-text {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: #7BF7FF;
+  opacity: 0.8;
+  text-align: center;
+}
+
+.calib-cookie-ok {
+  appearance: none;
+  background: transparent;
+  border: 1px solid #22E5FF;
+  color: #22E5FF;
+  font-family: inherit;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: lowercase;
+  padding: 0.3em 1em;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.calib-cookie-ok:hover,
+.calib-cookie-ok:focus-visible {
+  background: #22E5FF;
+  color: #020508;
+  outline: none;
+}
+
+/* guided per-axis calibration step line */
+.calib-step-line {
+  position: fixed;
+  top: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* horizontal/vertical fill bars — live feedback for captured hand reach */
+.calib-bar-track {
+  position: fixed;
+  background: rgba(123, 247, 255, 0.12);
+  border: 1px solid rgba(34, 229, 255, 0.35);
+  overflow: hidden;
+}
+
+.calib-bar-track-h {
+  left: 10%;
+  right: 10%;
+  top: 50%;
+  height: 0.6rem;
+  transform: translateY(-50%);
+}
+
+.calib-bar-track-v {
+  top: 15%;
+  bottom: 15%;
+  left: 50%;
+  width: 0.6rem;
+  transform: translateX(-50%);
+}
+
+.calib-bar-fill {
+  position: absolute;
+  background: #22E5FF;
+  box-shadow: 0 0 0.6rem 0.05rem rgba(34, 229, 255, 0.6);
+}
+
+.calib-bar-fill-h {
+  top: 0;
+  bottom: 0;
+}
+
+.calib-bar-fill-v {
+  left: 0;
+  right: 0;
+}

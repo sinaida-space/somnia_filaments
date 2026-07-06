@@ -1,13 +1,14 @@
-// calibration.js — arrival ritual: gate check, consent, camera init, hand-circle
-// calibration, parallax preview. Builds against Task 5's Tracking contract.
+// calibration.js — arrival ritual: gate check, consent, camera init, guided
+// per-axis calibration, parallax preview. Builds against Task 5's Tracking
+// contract.
 //
 // export async function runOnboarding(tracking, rootEl)
 // → resolves { handRange:{minX,maxX,minY,maxY} }
 // → rejects { code:'gate' }
 
-const CIRCLE_DURATION_MS = 12000;
-const CIRCLE_RADIUS_VMIN = 30;
-const PRESENCE_THRESHOLD = 0.7;
+const DETECT_STABLE_MS = 800;
+const DETECT_TIMEOUT_MS = 10000;
+const AXIS_DURATION_MS = 4000;
 const PARALLAX_DURATION_MS = 2000;
 const MIN_SPAN = 0.30;
 
@@ -40,10 +41,6 @@ function applyMinSpanGuard(range) {
   const x = widenAxis(range.minX, range.maxX);
   const y = widenAxis(range.minY, range.maxY);
   return { minX: x.min, maxX: x.max, minY: y.min, maxY: y.max };
-}
-
-function vmin(pct) {
-  return (Math.min(window.innerWidth, window.innerHeight) * pct) / 100;
 }
 
 function clearRoot(rootEl) {
@@ -89,7 +86,32 @@ function renderArrival(rootEl) {
     const btn = el('button', 'calib-button', 'begin');
     btn.addEventListener('click', () => resolve(), { once: true });
     screen.appendChild(btn);
+    const link = document.createElement('a');
+    link.className = 'calib-artist-link';
+    link.href = 'https://sinaida.eu';
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = 'sinaida.eu';
+    screen.appendChild(link);
   });
+}
+
+// Honest, dismiss-only cookie notice. No storage writes — it reappears on
+// reload by design, because the truthful claim is that nothing is stored.
+function renderCookieBanner(rootEl) {
+  const banner = el('div', 'calib-cookie-banner');
+  const text = el(
+    'p',
+    'calib-cookie-text',
+    'this site sets no cookies and tracks nothing — your camera never leaves your device'
+  );
+  const btn = el('button', 'calib-cookie-ok', 'ok');
+  btn.addEventListener('click', () => {
+    banner.remove();
+  }, { once: true });
+  banner.appendChild(text);
+  banner.appendChild(btn);
+  rootEl.appendChild(banner);
 }
 
 function renderWaiting(rootEl, line) {
@@ -110,26 +132,38 @@ async function initCamera(tracking, rootEl, videoEl) {
   }
 }
 
-// Runs the hand-circle ritual once. Resolves { range, presenceRatio }.
-function runHandCircleOnce(rootEl, tracking) {
+// Maps raw palm position (0..1 image space) to screen pixels for the live
+// hand-dot. Uses the full 0..1 span — this is a detect-time visualization,
+// not the calibrated range.
+function rawToScreen(rawX, rawY) {
+  return { x: rawX * window.innerWidth, y: rawY * window.innerHeight };
+}
+
+function positionHandDot(handDot, handLabel, rawX, rawY) {
+  const { x, y } = rawToScreen(rawX, rawY);
+  handDot.style.opacity = '0.9';
+  handDot.style.left = `${x}px`;
+  handDot.style.top = `${y}px`;
+  handLabel.style.opacity = '0.6';
+  handLabel.style.left = `${x}px`;
+  handLabel.style.top = `${y}px`;
+}
+
+function hideHandDot(handDot, handLabel) {
+  handDot.style.opacity = '0';
+  handLabel.style.opacity = '0';
+}
+
+// Step 0 — detect: waits for hand.present to be stable for DETECT_STABLE_MS.
+// Resolves { detected, rawX, rawY }. If nothing is detected within
+// DETECT_TIMEOUT_MS, resolves { detected:false }.
+function runDetectStep(rootEl, tracking) {
   return new Promise((resolve) => {
     const { root } = makeScreen(rootEl);
-    const line = el('p', 'calib-line', 'calibrating — trace the circle with your open hand');
-    line.style.position = 'fixed';
-    line.style.top = '10%';
-    line.style.left = '50%';
-    line.style.transform = 'translateX(-50%)';
+    const line = el('p', 'calib-line calib-step-line', 'show me your open hand');
     root.appendChild(line);
-
-    const subline = el('p', 'calib-line calib-subline', 'this sets how far the paddle reaches');
-    subline.style.position = 'fixed';
-    subline.style.top = '15%';
-    subline.style.left = '50%';
-    subline.style.transform = 'translateX(-50%)';
-    root.appendChild(subline);
-
-    const dot = el('div', 'calib-dot');
-    root.appendChild(dot);
+    const found = el('p', 'calib-line calib-fade calib-subline', 'got it');
+    root.appendChild(found);
 
     const handDot = el('div', 'calib-hand');
     handDot.style.opacity = '0';
@@ -138,62 +172,104 @@ function runHandCircleOnce(rootEl, tracking) {
     handLabel.style.opacity = '0';
     root.appendChild(handLabel);
 
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    let samples = 0;
-    let presentSamples = 0;
     let raf = null;
     const start = performance.now();
-    const cx = window.innerWidth / 2;
-    const cy = window.innerHeight / 2;
-    const r = vmin(CIRCLE_RADIUS_VMIN);
+    let presentSince = null;
 
     function tick(now) {
-      const t = now - start;
-      const frac = Math.min(t / CIRCLE_DURATION_MS, 1);
-      const angle = frac * Math.PI * 2 - Math.PI / 2;
-      const dx = cx + r * Math.cos(angle);
-      const dy = cy + r * Math.sin(angle);
-      dot.style.left = `${dx}px`;
-      dot.style.top = `${dy}px`;
-
       const snap = tracking.poll();
-      samples += 1;
-      // Capture the RAW palm position (0..1 image space) — this is the space
-      // handRange is applied in. snap.hand.x/y are already mapped to -1..1 and
-      // must NOT be used here, or the range comes out in the wrong space.
-      const rawX = snap.hand && snap.hand.rawX;
-      const rawY = snap.hand && snap.hand.rawY;
-      if (snap.hand && snap.hand.present && rawX !== undefined) {
-        presentSamples += 1;
-        const hx = (snap.hand.x * 0.5 + 0.5) * window.innerWidth;
-        const hy = (snap.hand.y * 0.5 + 0.5) * window.innerHeight;
-        handDot.style.opacity = '0.9';
-        handDot.style.left = `${hx}px`;
-        handDot.style.top = `${hy}px`;
-        handLabel.style.opacity = '0.6';
-        handLabel.style.left = `${hx}px`;
-        handLabel.style.top = `${hy}px`;
-        minX = Math.min(minX, rawX);
-        maxX = Math.max(maxX, rawX);
-        minY = Math.min(minY, rawY);
-        maxY = Math.max(maxY, rawY);
+      const hand = snap.hand;
+      const rawX = hand && hand.rawX;
+      const rawY = hand && hand.rawY;
+      const present = !!(hand && hand.present && rawX !== undefined);
+
+      if (present) {
+        positionHandDot(handDot, handLabel, rawX, rawY);
+        if (presentSince === null) presentSince = now;
+        if (now - presentSince >= DETECT_STABLE_MS) {
+          found.classList.add('calib-visible');
+          if (raf) cancelAnimationFrame(raf);
+          setTimeout(() => resolve({ detected: true, rawX, rawY }), 500);
+          return;
+        }
       } else {
-        handDot.style.opacity = '0';
-        handLabel.style.opacity = '0';
+        presentSince = null;
+        hideHandDot(handDot, handLabel);
+      }
+
+      if (now - start >= DETECT_TIMEOUT_MS) {
+        resolve({ detected: false });
+        return;
+      }
+
+      raf = requestAnimationFrame(tick);
+    }
+
+    raf = requestAnimationFrame(tick);
+  });
+}
+
+// Shared per-axis capture. axis is 'x' or 'y'. Shows a fill bar tracking the
+// captured extent as live feedback. Resolves { min, max }.
+function runAxisStep(rootEl, tracking, axis, promptLine) {
+  return new Promise((resolve) => {
+    const { root } = makeScreen(rootEl);
+    const line = el('p', 'calib-line calib-step-line', promptLine);
+    root.appendChild(line);
+
+    const barTrack = el('div', axis === 'x' ? 'calib-bar-track calib-bar-track-h' : 'calib-bar-track calib-bar-track-v');
+    const barFill = el('div', axis === 'x' ? 'calib-bar-fill calib-bar-fill-h' : 'calib-bar-fill calib-bar-fill-v');
+    barTrack.appendChild(barFill);
+    root.appendChild(barTrack);
+
+    const handDot = el('div', 'calib-hand');
+    handDot.style.opacity = '0';
+    root.appendChild(handDot);
+    const handLabel = el('div', 'calib-hand-label', 'you');
+    handLabel.style.opacity = '0';
+    root.appendChild(handLabel);
+
+    let min = Infinity;
+    let max = -Infinity;
+    let raf = null;
+    const start = performance.now();
+
+    function tick(now) {
+      const frac = Math.min((now - start) / AXIS_DURATION_MS, 1);
+      const snap = tracking.poll();
+      const hand = snap.hand;
+      const rawX = hand && hand.rawX;
+      const rawY = hand && hand.rawY;
+      const present = !!(hand && hand.present && rawX !== undefined);
+
+      if (present) {
+        positionHandDot(handDot, handLabel, rawX, rawY);
+        const v = axis === 'x' ? rawX : rawY;
+        min = Math.min(min, v);
+        max = Math.max(max, v);
+      } else {
+        hideHandDot(handDot, handLabel);
+      }
+
+      if (min !== Infinity) {
+        const span = Math.max(0, max - min);
+        if (axis === 'x') {
+          barFill.style.left = `${min * 100}%`;
+          barFill.style.width = `${span * 100}%`;
+        } else {
+          barFill.style.top = `${min * 100}%`;
+          barFill.style.height = `${span * 100}%`;
+        }
       }
 
       if (frac < 1) {
         raf = requestAnimationFrame(tick);
       } else {
-        const presenceRatio = samples > 0 ? presentSamples / samples : 0;
-        // Fallback is the full camera frame in 0..1 (raw) space, not -1..1.
-        const rawRange = (minX === Infinity)
-          ? { minX: 0, maxX: 1, minY: 0, maxY: 1 }
-          : { minX, maxX, minY, maxY };
-        // Guard against a too-narrow captured reach amplifying small hand
-        // motions into full-swing jitter downstream in tracking._processHand.
-        const range = applyMinSpanGuard(rawRange);
-        resolve({ range, presenceRatio });
+        if (min === Infinity) {
+          resolve({ min: 0, max: 1 });
+        } else {
+          resolve({ min, max });
+        }
       }
     }
 
@@ -201,12 +277,26 @@ function runHandCircleOnce(rootEl, tracking) {
   });
 }
 
-async function runHandRitual(rootEl, tracking) {
-  let result = await runHandCircleOnce(rootEl, tracking);
-  if (result.presenceRatio < PRESENCE_THRESHOLD) {
-    result = await runHandCircleOnce(rootEl, tracking);
+// Guided per-axis calibration: detect → horizontal → vertical. Never hard
+// blocks — falls back to a full-frame (guarded) range if the hand is never
+// detected. Resolves the assembled, min-span-guarded range in 0..1 raw space.
+async function runGuidedCalibration(rootEl, tracking) {
+  const detect = await runDetectStep(rootEl, tracking);
+
+  if (!detect.detected) {
+    return applyMinSpanGuard({ minX: 0, maxX: 1, minY: 0, maxY: 1 });
   }
-  return result.range;
+
+  const xRange = await runAxisStep(rootEl, tracking, 'x', 'now move your hand left and right');
+  const yRange = await runAxisStep(rootEl, tracking, 'y', 'now move your hand up and down');
+
+  const rawRange = {
+    minX: xRange.min,
+    maxX: xRange.max,
+    minY: yRange.min,
+    maxY: yRange.max
+  };
+  return applyMinSpanGuard(rawRange);
 }
 
 function runParallaxPreview(rootEl, tracking) {
@@ -230,6 +320,7 @@ export async function runOnboarding(tracking, rootEl) {
     throw { code: 'gate' };
   }
 
+  renderCookieBanner(rootEl);
   await renderArrival(rootEl);
 
   let videoEl = document.getElementById('cam');
@@ -246,7 +337,7 @@ export async function runOnboarding(tracking, rootEl) {
     throw { code: 'gate' };
   }
 
-  const handRange = await runHandRitual(rootEl, tracking);
+  const handRange = await runGuidedCalibration(rootEl, tracking);
   tracking.setHandRange(handRange);
 
   await runParallaxPreview(rootEl, tracking);
