@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PALETTE, TUNNEL, GAMEPLAY, PERF } from './config.js';
+import { PALETTE, TUNNEL, GAMEPLAY, PERF, HEADGAIN, SCREEN } from './config.js';
 import { bus } from './events.js';
 import { Game } from './game.js';
 import { Tunnel } from './tunnel.js';
@@ -227,14 +227,46 @@ function wait(ms) {
 
 let lastTrackingSnapshot = null;
 
-function updateTracking() {
+// Applied virtual-eye position (metres, rel. screen centre). We slew this toward
+// the gained/clamped head target so the whole scene can't jitter/swim faster than
+// HEADGAIN.slewPerSec, and a small deadzone kills static shimmer. Head ONLY ever
+// feeds this path; hand ONLY ever feeds game.setPaddleTarget — strict isolation.
+const eyeApplied = { x: 0, y: 0, z: SCREEN.defaultEyeM.z };
+
+function updateTracking(dtReal) {
   if (!tracking.ready) return;
   const t = tracking.poll();
   lastTrackingSnapshot = t;
+
+  // HAND -> PADDLE only.
   if (t.hand.present) game.setPaddleTarget(t.hand.x, t.hand.y); // else hold last paddle target
+
+  // HEAD -> OFF-AXIS EYE only.
   if (t.mode === 'full' && t.head.present) {
-    offAxis.setEyePosition(t.head.x, t.head.y, t.head.z);
+    // (a) lateral gain: amplify natural head shift into a slightly larger
+    //     virtual-eye shift so parallax against the deep tunnel reads clearly.
+    const tx = t.head.x * HEADGAIN.lateral;
+    const ty = t.head.y * HEADGAIN.lateral;
+    // (b) clamp depth to a plausible band so IPD-derived z noise can't warp
+    //     the frustum scale (s = near/ez) and pump the whole scene.
+    const tz = Math.min(HEADGAIN.zMax, Math.max(HEADGAIN.zMin, t.head.z));
+
+    // (c) slew-limit toward target (anti-swim): cap eye travel per frame.
+    const maxStep = HEADGAIN.slewPerSec * dtReal;
+    eyeApplied.x = slewTo(eyeApplied.x, tx, maxStep);
+    eyeApplied.y = slewTo(eyeApplied.y, ty, maxStep);
+    eyeApplied.z = slewTo(eyeApplied.z, tz, maxStep);
+
+    // (d) deadzone: only push a new frustum when the eye actually moved enough.
+    offAxis.setEyePosition(eyeApplied.x, eyeApplied.y, eyeApplied.z);
   }
+}
+
+function slewTo(current, target, maxStep) {
+  const delta = target - current;
+  if (Math.abs(delta) <= HEADGAIN.deadzoneM) return current;
+  if (Math.abs(delta) <= maxStep) return target;
+  return current + Math.sign(delta) * maxStep;
 }
 
 // ---- main loop -------------------------------------------------------------
@@ -253,7 +285,7 @@ function animate(nowMs) {
   updateTimescale(dtReal);
 
   if (gameState === 'play' || gameState === 'question') {
-    updateTracking();
+    updateTracking(dtReal);
 
     accumulator += dtReal;
     let steps = 0;
