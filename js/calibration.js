@@ -209,13 +209,19 @@ function runDetectStep(rootEl, tracking) {
   });
 }
 
-// Shared per-axis capture. axis is 'x' or 'y'. Shows a fill bar tracking the
-// captured extent as live feedback. Resolves { min, max }.
+// Shared per-axis capture. axis is 'x' or 'y'. A single-direction sweep guided
+// by a directional arrow; the fill bar tracks the captured extent as live
+// feedback. Resolves { min, max }.
 function runAxisStep(rootEl, tracking, axis, promptLine) {
   return new Promise((resolve) => {
     const { root } = makeScreen(rootEl);
     const line = el('p', 'calib-line calib-step-line', promptLine);
     root.appendChild(line);
+
+    // Directional arrow hint: one way only (→ across, ↓ down).
+    const arrow = el('div', axis === 'x' ? 'calib-arrow calib-arrow-h' : 'calib-arrow calib-arrow-v',
+      axis === 'x' ? '→' : '↓');
+    root.appendChild(arrow);
 
     const barTrack = el('div', axis === 'x' ? 'calib-bar-track calib-bar-track-h' : 'calib-bar-track calib-bar-track-v');
     const barFill = el('div', axis === 'x' ? 'calib-bar-fill calib-bar-fill-h' : 'calib-bar-fill calib-bar-fill-v');
@@ -287,8 +293,8 @@ async function runGuidedCalibration(rootEl, tracking) {
     return applyMinSpanGuard({ minX: 0, maxX: 1, minY: 0, maxY: 1 });
   }
 
-  const xRange = await runAxisStep(rootEl, tracking, 'x', 'now move your hand left and right');
-  const yRange = await runAxisStep(rootEl, tracking, 'y', 'now move your hand up and down');
+  const xRange = await runAxisStep(rootEl, tracking, 'x', 'sweep your hand across, following the arrow');
+  const yRange = await runAxisStep(rootEl, tracking, 'y', 'now sweep your hand down, following the arrow');
 
   const rawRange = {
     minX: xRange.min,
