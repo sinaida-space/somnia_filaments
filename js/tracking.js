@@ -186,6 +186,10 @@ export class Tracking {
       // Mirror X — webcam is flipped relative to player intuition.
       cx = 1 - cx;
 
+      // Flip Y — image space is top-down (0=top,1=bottom) but three.js world
+      // +Y is up, so hand-up must map to a larger cy for the paddle to rise.
+      cy = 1 - cy;
+
       // Map through calibrated hand range to -1..1, clamped.
       const r = this.handRange;
       const spanX = (r.maxX - r.minX) || 1;
