@@ -205,7 +205,9 @@ export class Tracking {
       }
 
       this.handPrevSmoothed = { x: sx, y: sy, t: nowS };
-      this.hand = { x: px, y: py, present: true };
+      // rawX/rawY: mirrored palm centroid in 0..1 image space, BEFORE range
+      // mapping — calibration captures min/max of these to build handRange.
+      this.hand = { x: px, y: py, present: true, rawX: cx, rawY: cy };
       this.handLastSeen = nowS;
     } else {
       // Lost: hold last value; drop present only after > 0.5s.

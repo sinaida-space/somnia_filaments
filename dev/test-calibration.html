@@ -27,13 +27,16 @@ import { runOnboarding } from '../js/calibration.js';
 // Mouse position drives hand.x/y in -1..1; head is a fixed present point so
 // the parallax preview screen is exercised.
 function makeMockTracking() {
-  let mouseX = 0, mouseY = 0;
-  let handRange = { minX: -1, maxX: 1, minY: -1, maxY: 1 };
+  let mouseX = 0, mouseY = 0;   // -1..1 (mapped output)
+  let rawX = 0.5, rawY = 0.5;   // 0..1 (raw image space, like real tracking)
+  let handRange = { minX: 0, maxX: 1, minY: 0, maxY: 1 };
   let lastMoveAt = performance.now();
 
   window.addEventListener('mousemove', (e) => {
-    mouseX = (e.clientX / window.innerWidth) * 2 - 1;
-    mouseY = (e.clientY / window.innerHeight) * 2 - 1;
+    rawX = e.clientX / window.innerWidth;
+    rawY = e.clientY / window.innerHeight;
+    mouseX = rawX * 2 - 1;
+    mouseY = rawY * 2 - 1;
     lastMoveAt = performance.now();
   });
 
@@ -53,8 +56,10 @@ function makeMockTracking() {
       const present = (performance.now() - lastMoveAt) < 3000;
       return {
         hand: {
-          x: mapRange(mouseX, handRange.minX, handRange.maxX),
-          y: mapRange(mouseY, handRange.minY, handRange.maxY),
+          x: mapRange(rawX, handRange.minX, handRange.maxX),
+          y: mapRange(rawY, handRange.minY, handRange.maxY),
+          rawX,
+          rawY,
           present
         },
         head: { x: mouseX * 0.1, y: mouseY * 0.1, z: 0.55, present: true },

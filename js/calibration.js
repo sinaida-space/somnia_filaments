@@ -116,15 +116,20 @@ function runHandCircleOnce(rootEl, tracking) {
 
       const snap = tracking.poll();
       samples += 1;
-      if (snap.hand && snap.hand.present) {
+      // Capture the RAW palm position (0..1 image space) — this is the space
+      // handRange is applied in. snap.hand.x/y are already mapped to -1..1 and
+      // must NOT be used here, or the range comes out in the wrong space.
+      const rawX = snap.hand && snap.hand.rawX;
+      const rawY = snap.hand && snap.hand.rawY;
+      if (snap.hand && snap.hand.present && rawX !== undefined) {
         presentSamples += 1;
         handDot.style.opacity = '0.7';
         handDot.style.left = `${(snap.hand.x * 0.5 + 0.5) * window.innerWidth}px`;
         handDot.style.top = `${(snap.hand.y * 0.5 + 0.5) * window.innerHeight}px`;
-        minX = Math.min(minX, snap.hand.x);
-        maxX = Math.max(maxX, snap.hand.x);
-        minY = Math.min(minY, snap.hand.y);
-        maxY = Math.max(maxY, snap.hand.y);
+        minX = Math.min(minX, rawX);
+        maxX = Math.max(maxX, rawX);
+        minY = Math.min(minY, rawY);
+        maxY = Math.max(maxY, rawY);
       } else {
         handDot.style.opacity = '0';
       }
@@ -133,8 +138,9 @@ function runHandCircleOnce(rootEl, tracking) {
         raf = requestAnimationFrame(tick);
       } else {
         const presenceRatio = samples > 0 ? presentSamples / samples : 0;
+        // Fallback is the full camera frame in 0..1 (raw) space, not -1..1.
         const range = (minX === Infinity)
-          ? { minX: -1, maxX: 1, minY: -1, maxY: 1 }
+          ? { minX: 0, maxX: 1, minY: 0, maxY: 1 }
           : { minX, maxX, minY, maxY };
         resolve({ range, presenceRatio });
       }
