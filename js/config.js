@@ -1,7 +1,12 @@
 export const PALETTE = { filament: '#22E5FF', glow: '#7BF7FF', void: '#020508', dim: '#0A3540' };
 export const TUNNEL = { radius: 3.0, length: 60, farZ: -58 };
 export const WORLD_PER_METER = 10;
-export const SCREEN = { widthM: 0.34, defaultEyeM: { x: 0, y: 0, z: 0.55 } };
+// Baseline eye→screen distance. Larger z = camera sits further back through the
+// window, so more of the tunnel is visible and it reads as further away. Bumped
+// from 0.55 → 0.85 (T21 zoom-out) — the tunnel was too in-your-face. The whole
+// head-z clamp band (HEADGAIN.zMin/zMax) moves with it so real head motion still
+// slews within a plausible band and the off-axis parallax/stability is preserved.
+export const SCREEN = { widthM: 0.34, defaultEyeM: { x: 0, y: 0, z: 0.85 } };
 export const GAMEPLAY = { ballSpeed: 14, ballR: 0.25, paddleZ: -4, paddleHalfW: 0.9, paddleHalfH: 0.6,
                           blockR: 0.7, blockCount: 36, questionTarget: 12 };
 
@@ -13,8 +18,8 @@ export const GAMEPLAY = { ballSpeed: 14, ballR: 0.25, paddleZ: -4, paddleHalfW: 
 // micro-jitter/swim of the whole scene without lagging real head motion.
 export const HEADGAIN = {
   lateral: 1.6,     // gain on head x/y before setEyePosition (>1 amplifies parallax)
-  zMin: 0.35,       // clamp head z (metres) — plausible near bound
-  zMax: 0.90,       // clamp head z (metres) — plausible far bound
+  zMin: 0.60,       // clamp head z (metres) — plausible near bound (T21: band moved back with defaultEyeM.z)
+  zMax: 1.15,       // clamp head z (metres) — plausible far bound (T21: was 0.90)
   deadzoneM: 0.003, // ignore sub-3mm eye moves (kills static shimmer)
   slewPerSec: 4.0,  // max eye travel (metres/sec) toward target — anti-swim slew limit
 };

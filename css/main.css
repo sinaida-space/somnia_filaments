@@ -20,3 +20,177 @@ canvas {
   width: 100%;
   height: 100%;
 }
+
+/* ======================================================================
+   T21 — Tron-Legacy HUD chrome + farewell. Cyan-on-void, VT323.
+   Palette: filament #22E5FF · glow #7BF7FF · void #020508.
+   ====================================================================== */
+
+.hidden { display: none !important; }
+
+/* Fixed top HUD bar — transparent to pointer events except its buttons. */
+.hud {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  padding: 0.6em 1em;
+  pointer-events: none;
+  font-family: 'VT323', ui-monospace, monospace;
+  color: #7BF7FF;
+  background: linear-gradient(rgba(2, 5, 8, 0.55), rgba(2, 5, 8, 0));
+}
+
+.hud-left {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  min-width: 0;
+}
+
+.hud-glyph {
+  font-size: 1.4rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 8px rgba(34, 229, 255, 0.7));
+}
+
+.hud-hint {
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  opacity: 0.8;
+  text-shadow: 0 0 8px rgba(34, 229, 255, 0.4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.hud-btn {
+  pointer-events: auto;
+  cursor: pointer;
+  font-family: 'VT323', ui-monospace, monospace;
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #22E5FF;
+  background: rgba(2, 6, 10, 0.55);
+  border: 1px solid #22E5FF;
+  padding: 0.2em 0.7em;
+  box-shadow: 0 0 6px rgba(34, 229, 255, 0.35), inset 0 0 8px rgba(34, 229, 255, 0.08);
+  text-shadow: 0 0 6px rgba(34, 229, 255, 0.6);
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.hud-btn:hover {
+  background: #22E5FF;
+  color: #020508;
+  text-shadow: none;
+  box-shadow: 0 0 14px rgba(34, 229, 255, 0.7);
+}
+
+/* Dropdown menu (finish / restart / fullscreen / mute). */
+.hud-menu {
+  position: fixed;
+  top: 3em;
+  right: 1em;
+  z-index: 10001;
+  display: flex;
+  flex-direction: column;
+  min-width: 12ch;
+  font-family: 'VT323', ui-monospace, monospace;
+  background: rgba(2, 6, 10, 0.92);
+  border: 1px solid #22E5FF;
+  box-shadow: 0 0 18px rgba(34, 229, 255, 0.35), inset 0 0 20px rgba(34, 229, 255, 0.06);
+}
+
+.hud-menu-item {
+  cursor: pointer;
+  text-align: left;
+  font-family: 'VT323', ui-monospace, monospace;
+  font-size: 1.05rem;
+  letter-spacing: 0.05em;
+  text-transform: lowercase;
+  color: #7BF7FF;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(34, 229, 255, 0.2);
+  padding: 0.5em 1em;
+  text-shadow: 0 0 6px rgba(34, 229, 255, 0.4);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.hud-menu-item:last-child { border-bottom: 0; }
+
+.hud-menu-item:hover {
+  background: #22E5FF;
+  color: #020508;
+  text-shadow: none;
+}
+
+/* Farewell screen. */
+.farewell {
+  position: fixed;
+  inset: 0;
+  z-index: 10002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(2, 5, 8, 0.92) 0%, rgba(2, 5, 8, 0.99) 100%);
+  opacity: 0;
+  transition: opacity 1.2s ease;
+  font-family: 'VT323', ui-monospace, monospace;
+}
+
+.farewell.farewell-visible { opacity: 1; }
+
+.farewell-inner {
+  text-align: center;
+  padding: 2em;
+}
+
+.farewell-breath {
+  margin: 0 0 2em;
+  font-size: clamp(20px, 3.5vw, 34px);
+  letter-spacing: 0.05em;
+  color: #7BF7FF;
+  text-shadow: 0 0 12px rgba(34, 229, 255, 0.6), 0 0 28px rgba(34, 229, 255, 0.3);
+}
+
+.farewell-buttons {
+  display: flex;
+  gap: 1em;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.farewell-btn {
+  cursor: pointer;
+  font-family: 'VT323', ui-monospace, monospace;
+  font-size: 1.2rem;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  color: #22E5FF;
+  background: transparent;
+  border: 1px solid #22E5FF;
+  padding: 0.55em 1.7em;
+  box-shadow: 0 0 8px rgba(34, 229, 255, 0.35), inset 0 0 10px rgba(34, 229, 255, 0.06);
+  text-shadow: 0 0 8px rgba(34, 229, 255, 0.6);
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.farewell-btn:hover {
+  background: #22E5FF;
+  color: #020508;
+  text-shadow: none;
+  box-shadow: 0 0 16px rgba(34, 229, 255, 0.7);
+}

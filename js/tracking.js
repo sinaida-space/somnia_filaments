@@ -17,6 +17,22 @@ const REAL_IPD_M = 0.063;                 // average human interpupillary distan
 const HAND_LOST_S = 0.5;                   // hold last hand value this long before present=false
 const EASE_S = 2.0;                        // head ease-to-default duration in hand-only mode
 const PROC_WINDOW = 90;                    // rolling frames for procMs mean
+const GESTURE_DEBOUNCE = 4;                // frames a raw gesture must persist to commit
+
+// Curl-based gesture classifier. Landmarks are MediaPipe hand indices; a fingertip
+// is "curled" when it sits closer to the wrist than its PIP joint (two indices back)
+// by more than a small margin scaled to hand size. All four fingers curled → fist;
+// none curled → palm (open hand). Anything else → 'open' (some fingers extended).
+function classifyGesture(l) {
+  const wrist = l[0], mcp = l[9];
+  const size = Math.hypot(wrist.x - mcp.x, wrist.y - mcp.y) || 1e-4;
+  const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const curled = (tip) => d(l[tip], wrist) < d(l[tip - 2], wrist) + size * 0.1;
+  const i = curled(8), m = curled(12), r = curled(16), p = curled(20);
+  if (i && m && r && p) return 'fist';
+  if (!i && !m && !r && !p) return 'palm';
+  return 'open';
+}
 
 export class Tracking {
   constructor() {
@@ -39,9 +55,16 @@ export class Tracking {
     // responsiveness. Kept modest so quick hands don't reintroduce jitter.
     this.handFx = new OneEuroFilter(1.6, 0.045, 1.0);
     this.handFy = new OneEuroFilter(1.6, 0.045, 1.0);
-    this.hand = { x: 0, y: 0, present: false };
+    this.hand = { x: 0, y: 0, present: false, gesture: null };
     this.handLastSeen = -Infinity;
     this.handPrevT = 0;   // last hand sample time, for One-Euro dt only
+
+    // Gesture debounce (additive; never touches x/y/present/One-Euro). Curl-based
+    // classification flickers through neighbouring shapes for a frame or two on a
+    // transition — hold a raw label GESTURE_DEBOUNCE frames before it becomes real.
+    this._rawGesture = null;
+    this._gestureStable = 0;
+    this.gesture = null;   // committed, debounced gesture ('fist'|'palm'|'open'|null)
 
     // Head One-Euro (metric) + last valid detection.
     this.headFx = new OneEuroFilter(0.6, 0.02, 1.0);
@@ -208,11 +231,23 @@ export class Tracking {
       // so a single-frame raw jump can never overshoot past the smoothed value.
       // rawX/rawY: mirrored palm centroid in 0..1 image space, BEFORE range
       // mapping — calibration captures min/max of these to build handRange.
-      this.hand = { x: sx, y: sy, present: true, rawX: cx, rawY: cy };
+      // Gesture (additive): classify + temporal debounce, independent of x/y.
+      const raw = classifyGesture(lm);
+      if (raw === this._rawGesture) this._gestureStable++;
+      else { this._rawGesture = raw; this._gestureStable = 1; }
+      if (this._gestureStable >= GESTURE_DEBOUNCE) this.gesture = raw;
+
+      this.hand = { x: sx, y: sy, present: true, rawX: cx, rawY: cy, gesture: this.gesture };
       this.handLastSeen = nowS;
     } else {
       // Lost: hold last value; drop present only after > 0.5s.
-      if (nowS - this.handLastSeen > HAND_LOST_S) this.hand.present = false;
+      if (nowS - this.handLastSeen > HAND_LOST_S) {
+        this.hand.present = false;
+        this.hand.gesture = null;
+        this.gesture = null;
+        this._rawGesture = null;
+        this._gestureStable = 0;
+      }
     }
   }
 

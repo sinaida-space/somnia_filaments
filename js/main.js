@@ -6,6 +6,7 @@ import { Tunnel } from './tunnel.js';
 import { OffAxisCamera } from './offAxisCamera.js';
 import { Tracking } from './tracking.js';
 import { QuestionOverlay } from './overlay.js';
+import { UI } from './ui.js';
 import { QUESTIONS } from './questions.js';
 import { runOnboarding } from './calibration.js';
 import { audio } from './audio.js';
@@ -25,6 +26,7 @@ const offAxis = new OffAxisCamera();
 const tracking = new Tracking();
 
 let overlay = null; // built after onboarding clears #ui
+let ui = null;      // HUD chrome, built after onboarding clears #ui
 
 // ---- state -----------------------------------------------------------
 
@@ -131,7 +133,7 @@ async function runQuestion(pos) {
   questionIndex++;
 
   setState('question');
-  timescaleTarget = 0.12;
+  timescaleTarget = 0; // FULL freeze — no ball drift; resumes only on fist/button
   tunnel.emitRing(pos.z, 1.0);
 
   bus.emit('question:start', { index: idx });
@@ -181,42 +183,48 @@ async function startEnding() {
 
   await wait(6000);
 
-  await overlay.show('you brought all of this with you', -1);
+  // Lead-in line (auto-advancing — not gesture-gated), then the farewell screen.
+  overlay.panel.classList.remove('qo-fading');
+  overlay.textEl.textContent = '';
+  overlay.dotsEl.textContent = '';
+  overlay.panel.classList.add('qo-visible');
+  await overlay.typeText('you brought all of this with you');
+  await wait(2600);
+  overlay.panel.classList.remove('qo-visible');
+  overlay.textEl.textContent = '';
 
-  const again = document.createElement('button');
-  again.textContent = 'again';
-  again.style.position = 'fixed';
-  again.style.left = '50%';
-  again.style.bottom = '12%';
-  again.style.transform = 'translateX(-50%)';
-  again.style.zIndex = '9999';
-  again.style.background = 'transparent';
-  again.style.border = `1px solid ${PALETTE.filament}`;
-  again.style.color = PALETTE.filament;
-  again.style.fontFamily = "'IBM Plex Mono', ui-monospace, monospace";
-  again.style.fontSize = '0.9rem';
-  again.style.letterSpacing = '0.05em';
-  again.style.textTransform = 'lowercase';
-  again.style.padding = '0.7em 1.6em';
-  again.style.cursor = 'pointer';
-  uiRoot.appendChild(again);
-
-  again.addEventListener('click', () => {
-    ganzfeld.remove();
-    again.remove();
-    resetAndRestart();
-  }, { once: true });
+  endingGanzfeld = ganzfeld; // cleared by resetAndRestart via the farewell 'again'
+  showFarewell();
 }
 
+// Route to the calm farewell screen from anywhere (menu 'finish' or natural end).
+function showFarewell() {
+  timescaleTarget = 0;
+  setState('ending');
+  if (ui) ui.showFarewell();
+}
+
+let endingGanzfeld = null;
+
 function resetAndRestart() {
+  if (endingGanzfeld) { endingGanzfeld.remove(); endingGanzfeld = null; }
+  if (ui) ui.hideFarewell();
   questionIndex = 0;
   questioning = false;
   ending = false;
+  prevGesture = null;
   timescale = 1.0;
   timescaleTarget = 1.0;
   tunnel.setDim(0);
   game.start();
   setState('play');
+}
+
+// Menu 'finish' — jump to the farewell from anywhere during play.
+function finishNow() {
+  if (ending) return;
+  ending = true;
+  showFarewell();
 }
 
 function wait(ms) {
@@ -233,6 +241,8 @@ let lastTrackingSnapshot = null;
 // feeds this path; hand ONLY ever feeds game.setPaddleTarget — strict isolation.
 const eyeApplied = { x: 0, y: 0, z: SCREEN.defaultEyeM.z };
 
+let prevGesture = null; // for the fist rising-edge (palm/open -> fist)
+
 function updateTracking(dtReal) {
   if (!tracking.ready) return;
   const t = tracking.poll();
@@ -240,6 +250,16 @@ function updateTracking(dtReal) {
 
   // HAND -> PADDLE only.
   if (t.hand.present) game.setPaddleTarget(t.hand.x, t.hand.y); // else hold last paddle target
+
+  // GESTURE (additive, isolated from paddle): live glyph + fist rising-edge that
+  // dismisses an open question. Rising-edge = previous non-fist -> current fist,
+  // so a held fist fires exactly once and can't re-trigger.
+  const g = t.hand.present ? (t.hand.gesture || null) : null;
+  if (ui) ui.setGlyph(g);
+  if (overlay) overlay.setGlyph(g);
+  const roseToFist = g === 'fist' && prevGesture !== 'fist';
+  if (roseToFist && overlay && overlay.open) overlay.requestContinue();
+  prevGesture = g;
 
   // HEAD -> OFF-AXIS EYE only.
   if (t.mode === 'full' && t.head.present) {
@@ -316,6 +336,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'm' || e.key === 'M') {
     muted = !muted;
     audio.setMuted(muted);
+    if (ui) ui.setMuted(muted, false); // sync HUD label, don't re-fire the callback
   }
   if (e.key === 'd' || e.key === 'D') {
     toggleDebugHud();
@@ -336,7 +357,7 @@ function toggleDebugHud() {
     debugHud.style.left = '8px';
     debugHud.style.zIndex = '99999';
     debugHud.style.pointerEvents = 'none';
-    debugHud.style.fontFamily = "'IBM Plex Mono', ui-monospace, monospace";
+    debugHud.style.fontFamily = "'VT323', ui-monospace, monospace";
     debugHud.style.fontSize = '0.7rem';
     debugHud.style.lineHeight = '1.3';
     debugHud.style.color = PALETTE.filament;
@@ -369,6 +390,11 @@ function updateDebugHud() {
 
 runOnboarding(tracking, uiRoot).then(() => {
   overlay = new QuestionOverlay(uiRoot);
+  ui = new UI(uiRoot);
+  ui.setMuted(muted, false);
+  ui.onMute((m) => { muted = m; audio.setMuted(m); });
+  ui.onFinish(finishNow);
+  ui.onRestart(resetAndRestart);
   audio.init();
   audio.listen(bus);
   game.start();

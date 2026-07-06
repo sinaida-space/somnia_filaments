@@ -1,8 +1,14 @@
 const TYPE_CHAR_MS = 32;
-const HOLD_MS = 3500;
+const GRACE_MS = 500;      // ignore continue for this long so the catching gesture doesn't skip
 const FADE_OUT_MS = 600;
 const TIER_DOTS = { 1: '·', 2: '··', 3: '···' };
 
+// Terminal-panel question overlay. The game is FULLY frozen while this is open
+// (main.js sets timescale target 0). Dismissal is gesture-gated, not time-gated:
+// the overlay resolves only when the player makes a ✊ fist (main.js drives the
+// rising-edge and calls requestContinue()) OR clicks the `let's go further`
+// button. A short grace after the text finishes typing prevents the same gesture
+// that caught the block from instantly skipping the question.
 export class QuestionOverlay {
   constructor(rootEl) {
     this.root = rootEl;
@@ -45,6 +51,58 @@ export class QuestionOverlay {
     this.dotsEl = document.createElement('div');
     this.dotsEl.className = 'qo-dots';
     this.panel.appendChild(this.dotsEl);
+
+    // Continue affordance: gesture glyph + hint line + explicit button fallback.
+    this.footer = document.createElement('div');
+    this.footer.className = 'qo-footer';
+    this.panel.appendChild(this.footer);
+
+    this.glyphEl = document.createElement('span');
+    this.glyphEl.className = 'qo-glyph';
+    this.glyphEl.textContent = '✊';
+    this.footer.appendChild(this.glyphEl);
+
+    this.hintEl = document.createElement('span');
+    this.hintEl.className = 'qo-hint';
+    this.hintEl.textContent = 'make a fist — let’s go further';
+    this.footer.appendChild(this.hintEl);
+
+    this.button = document.createElement('button');
+    this.button.className = 'qo-continue';
+    this.button.type = 'button';
+    this.button.textContent = "let’s go further";
+    this.button.addEventListener('click', () => this.requestContinue());
+    this.footer.appendChild(this.button);
+
+    this._resolve = null;
+    this._armed = false;   // true once the grace window has passed
+  }
+
+  // Reflect the live hand gesture on the footer glyph while open (main.js pushes it).
+  setGlyph(gesture) {
+    if (!this.open) return;
+    this.glyphEl.textContent = gesture === 'fist' ? '✊' : gesture === 'palm' ? '✋' : '·';
+  }
+
+  get open() { return this.panel.classList.contains('qo-visible'); }
+
+  // Resolve the open question — called by the fist rising-edge (main.js) or the
+  // button. Ignored during the grace window and when not open.
+  requestContinue() {
+    if (!this.open || !this._armed || !this._resolve) return;
+    const done = this._resolve;
+    this._resolve = null;
+    this._armed = false;
+
+    this.panel.classList.add('qo-fading');
+    this.vignette.classList.remove('qo-visible');
+    setTimeout(() => {
+      this.panel.classList.remove('qo-visible', 'qo-fading');
+      this.textEl.textContent = '';
+      this.dotsEl.textContent = '';
+      this.cursorEl.classList.remove('qo-blink');
+      done();
+    }, FADE_OUT_MS);
   }
 
   async show(text, index) {
@@ -55,6 +113,8 @@ export class QuestionOverlay {
     this.textEl.textContent = '';
     this.dotsEl.textContent = tier ? TIER_DOTS[tier] || '' : '';
     this.cursorEl.classList.remove('qo-blink');
+    this.glyphEl.textContent = '·';
+    this._armed = false;
 
     this.vignette.classList.add('qo-visible');
     this.panel.classList.add('qo-visible');
@@ -63,17 +123,11 @@ export class QuestionOverlay {
 
     this.cursorEl.classList.add('qo-blink');
 
-    await wait(HOLD_MS);
-
-    this.panel.classList.add('qo-fading');
-    this.vignette.classList.remove('qo-visible');
-
-    await wait(FADE_OUT_MS);
-
-    this.panel.classList.remove('qo-visible');
-    this.textEl.textContent = '';
-    this.dotsEl.textContent = '';
-    this.cursorEl.classList.remove('qo-blink');
+    // Arm continue after a short grace so the catching gesture can't skip it.
+    return new Promise((resolve) => {
+      this._resolve = resolve;
+      setTimeout(() => { this._armed = true; }, GRACE_MS);
+    });
   }
 
   async typeText(question) {
