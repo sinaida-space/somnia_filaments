@@ -158,11 +158,19 @@ export class Game {
         const x = Math.cos(angle) * radius;
         const y = Math.sin(angle) * radius;
 
-        const mat = new THREE.MeshBasicMaterial({ color: PALETTE.filament });
+        const mat = new THREE.MeshBasicMaterial({ color: PALETTE.filament, transparent: true, opacity: 0.85 });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(x, y, z);
         mesh.userData.spinAxis = new THREE.Vector3(rand() - 0.5, rand() - 0.5, rand() - 0.5).normalize();
         mesh.userData.spinSpeed = 0.2 + rand() * 0.4;
+
+        // Glowing edge outline, parented to the block so it spins and
+        // scale-to-zeros with the break animation alongside the filled shard.
+        const edgeGeo = new THREE.EdgesGeometry(geo);
+        const edgeMat = new THREE.LineBasicMaterial({ color: PALETTE.glow });
+        const edges = new THREE.LineSegments(edgeGeo, edgeMat);
+        mesh.add(edges);
+
         this.scene.add(mesh);
 
         this.blocks.push({
