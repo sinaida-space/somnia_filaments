@@ -44,6 +44,23 @@
   word-break: break-all;
 }
 
+.calib-mobile-link {
+  font-family: inherit;
+  font-size: 0.9rem;
+  letter-spacing: 0.05em;
+  text-transform: lowercase;
+  color: #22E5FF;
+  border: 1px solid #22E5FF;
+  padding: 0.5em 1.2em;
+  text-decoration: none;
+  transition: background 0.2s, color 0.2s;
+}
+
+.calib-mobile-link:hover {
+  background: #22E5FF;
+  color: #020508;
+}
+
 .calib-button {
   appearance: none;
   background: transparent;

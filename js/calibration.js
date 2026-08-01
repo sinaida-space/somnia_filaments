@@ -76,6 +76,17 @@ function renderGate(rootEl, message) {
   screen.appendChild(el('h1', 'calib-title', 'somnia filaments'));
   screen.appendChild(el('p', 'calib-line', message || 'this piece needs a desktop, a webcam, and your hands'));
   screen.appendChild(el('p', 'calib-url', window.location.href));
+
+  const mobileLine = el('p', 'calib-line', 'on this device, try astral drifters instead');
+  const mobileLink = document.createElement('a');
+  mobileLink.className = 'calib-mobile-link';
+  mobileLink.href = 'https://sinaida-space.github.io/astral-drifters/';
+  mobileLink.textContent = 'astral drifters →';
+  mobileLink.target = '_blank';
+  mobileLink.rel = 'noopener noreferrer';
+
+  screen.appendChild(mobileLine);
+  screen.appendChild(mobileLink);
 }
 
 function renderArrival(rootEl) {
