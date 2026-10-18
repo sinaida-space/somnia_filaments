@@ -104,6 +104,11 @@ function renderArrival(rootEl) {
     link.rel = 'noopener noreferrer';
     link.textContent = 'sinaida.eu';
     screen.appendChild(link);
+    const privacy = document.createElement('a');
+    privacy.className = 'calib-artist-link';
+    privacy.href = 'privacy.html';
+    privacy.textContent = 'privacy';
+    screen.appendChild(privacy);
   });
 }
 
@@ -114,7 +119,7 @@ function renderCookieBanner(rootEl) {
   const text = el(
     'p',
     'calib-cookie-text',
-    'this site sets no cookies and tracks nothing — your camera never leaves your device'
+    'this site sets no cookies and runs no analytics. camera images stay on your device.'
   );
   const btn = el('button', 'calib-cookie-ok', 'ok');
   btn.addEventListener('click', () => {
