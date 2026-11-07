@@ -7,10 +7,11 @@ import { SCREEN } from './config.js';
 import { OneEuroFilter } from './oneEuro.js';
 
 const TASKS_VERSION = '0.10.14';
-const CDN_BASE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VERSION}`;
+// Vendored MediaPipe folder, served from this site.
+const CDN_BASE = new URL(`../vendor/mediapipe/${TASKS_VERSION}`, import.meta.url).href;
 const WASM_PATH = `${CDN_BASE}/wasm`;
-const HAND_MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
-const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+const HAND_MODEL = `${CDN_BASE}/models/hand_landmarker.task`;
+const FACE_MODEL = `${CDN_BASE}/models/face_landmarker.task`;
 
 const PALM_IDS = [0, 5, 9, 13, 17];      // wrist + finger MCP joints -> palm centroid
 const REAL_IPD_M = 0.063;                 // average human interpupillary distance
